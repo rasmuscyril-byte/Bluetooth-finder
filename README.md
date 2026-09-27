@@ -31,13 +31,16 @@ Du skal bruge en computer med Bluetooth – helst en bærbar, så du kan gå run
 
 1. Har du ikke Python, så hent det på [python.org/downloads](https://www.python.org/downloads/).
    Sæt flueben i **"Add python.exe to PATH"** under installationen.
-2. Dobbeltklik på **`start-windows.bat`**.
+2. Dobbeltklik på **`start-windows.bat`**. Viser Windows en blå boks ("Windows beskyttede din pc"),
+   så tryk **Flere oplysninger → Kør alligevel**.
 3. Første gang henter programmet Bluetooth-biblioteket *bleak* (kræver internet, tager et minuts tid).
    Derefter åbner iPad-finder af sig selv i din browser.
 
 ### Mac
 
 1. Højreklik på **`start-mac.command`** og vælg **Åbn** (første gang skal du bekræfte, at du vil åbne den).
+   På nyere macOS skal du i stedet gå til **Systemindstillinger → Anonymitet og sikkerhed** og trykke
+   **Åbn alligevel** – eller bruge Terminal-metoden herunder, som altid virker.
 2. Macen spørger, om Terminal må bruge Bluetooth – tryk **Tillad**.
    Spørger den ikke, så gå til **Systemindstillinger → Anonymitet og sikkerhed → Bluetooth** og slå Terminal til.
 3. Browseren åbner af sig selv.
