@@ -203,7 +203,8 @@ function decodeFindMy(p, length) {
     variant: length >= 25 ? "separated" : "nearby",
     status,
     deviceType: FIND_MY_TYPES[(status >> 4) & 0x03],
-    battery: FIND_MY_BATTERY[(status >> 6) & 0x03],
+    // iPhones/Watches send status 0x00, which says nothing about the battery.
+    battery: status === 0x00 ? null : FIND_MY_BATTERY[(status >> 6) & 0x03],
     ownerConnected: Boolean(status & 0x04),
   };
 }

@@ -16,13 +16,19 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
-if [ ! -x ".venv/bin/python" ]; then
+# (Re)create the environment unless it has a working pip, so a failed first
+# run (e.g. python3-venv missing) does not leave a broken .venv behind.
+if ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
   echo "Gør klar første gang ..."
-  "$PY" -m venv .venv || { echo "Kunne ikke oprette .venv (mangler python3-venv?)"; exit 1; }
+  if ! "$PY" -m venv --clear .venv; then
+    rm -rf .venv
+    echo "Kunne ikke oprette .venv. Mangler python3-venv? (fx: sudo apt install python3-venv)"
+    exit 1
+  fi
 fi
 
 .venv/bin/python -m pip install --disable-pip-version-check -q -r requirements.txt || {
-  echo "Installationen af Bluetooth-biblioteket (bleak) fejlede. Er du på internettet?"
+  echo "Installationen af Bluetooth-biblioteket (bleak) fejlede – se fejlbeskeden ovenfor. Første start kræver internet."
   exit 1
 }
 

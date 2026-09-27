@@ -15,6 +15,7 @@ import json
 import logging
 import platform
 import sys
+import time
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import unquote, urlsplit
@@ -32,6 +33,9 @@ MAX_BATCH = 2000
 SUBSCRIBER_QUEUE = 100
 PING_SECONDS = 15.0
 RETRY_SECONDS = 5.0
+# No advert at all for this long while "scanning" means the scan died silently
+# (Bluetooth switched off and on, laptop sleep). Restart it.
+STALL_SECONDS = 20.0
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1"}
 
@@ -115,6 +119,7 @@ class BridgeServer:
         self._subscribers: set[asyncio.Queue[bytes]] = set()
         self._tasks: list[asyncio.Task[Any]] = []
         self._connections: set[asyncio.Task[Any]] = set()
+        self._writers: set[asyncio.StreamWriter] = set()
         self._last_status: Optional[dict[str, Any]] = None
         self._closing = False
         if scanner is not None:
@@ -158,10 +163,20 @@ class BridgeServer:
 
     async def close(self) -> None:
         self._closing = True
+        if self.scanner is not None:
+            shutdown = getattr(self.scanner, "shutdown", None)
+            await (shutdown() if shutdown is not None else self.scanner.stop())
         for task in self._tasks:
             task.cancel()
         for task in list(self._connections):
             task.cancel()
+        for writer in list(self._writers):
+            # Abort instead of a graceful close: a browser tab that stopped reading
+            # would otherwise keep the server (and Ctrl+C) waiting forever.
+            try:
+                writer.transport.abort()
+            except Exception:
+                pass
         for task in self._tasks + list(self._connections):
             try:
                 await task
@@ -170,10 +185,11 @@ class BridgeServer:
         self._tasks.clear()
         if self._server is not None:
             self._server.close()
-            await self._server.wait_closed()
+            try:
+                await asyncio.wait_for(self._server.wait_closed(), 2.0)
+            except asyncio.TimeoutError:
+                pass
             self._server = None
-        if self.scanner is not None:
-            await self.scanner.stop()
 
     # ------------------------------------------------------------------ scanner side
 
@@ -209,20 +225,24 @@ class BridgeServer:
             log.warning("Bluetooth: %s", exc.message)
 
     async def _supervise_loop(self) -> None:
-        """Broadcast status changes and keep retrying a scanner that failed to start."""
+        """Broadcast status changes, retry a scanner that failed to start and
+        restart a scan that died silently."""
         since_retry = 0.0
         while True:
             await asyncio.sleep(1.0)
-            since_retry += 1.0
             scanner = self.scanner
-            if (
-                scanner is not None
-                and not scanner.scanning
-                and not getattr(scanner, "identifying", False)
-                and since_retry >= RETRY_SECONDS
-            ):
-                since_retry = 0.0
-                await self.start_scanner()
+            if scanner is not None and not getattr(scanner, "busy", False):
+                if scanner.scanning:
+                    since_retry = 0.0
+                    last = max(getattr(scanner, "last_advert_at", None) or 0.0, getattr(scanner, "started_at", None) or 0.0)
+                    if last and time.monotonic() - last > STALL_SECONDS and hasattr(scanner, "restart"):
+                        log.info("No adverts for %.0f s; restarting the scan", STALL_SECONDS)
+                        await scanner.restart()
+                else:
+                    since_retry += 1.0
+                    if since_retry >= RETRY_SECONDS:
+                        since_retry = 0.0
+                        await self.start_scanner()
             self.broadcast_status_if_changed()
 
     def broadcast_status_if_changed(self) -> None:
@@ -260,6 +280,7 @@ class BridgeServer:
         task = asyncio.current_task()
         if task is not None:
             self._connections.add(task)
+        self._writers.add(writer)
         try:
             await self._handle(reader, writer)
         except (ConnectionError, asyncio.IncompleteReadError):
@@ -271,6 +292,7 @@ class BridgeServer:
         finally:
             if task is not None:
                 self._connections.discard(task)
+            self._writers.discard(writer)
             try:
                 writer.close()
             except Exception:
@@ -333,7 +355,11 @@ class BridgeServer:
         hostname = parsed.hostname.lower()
         if ":" in hostname:
             hostname = f"[{hostname}]"
-        return hostname in self.allowed_hosts and parsed.port == self.port
+        try:
+            port = parsed.port
+        except ValueError:  # e.g. "http://127.0.0.1:99999"
+            return False
+        return hostname in self.allowed_hosts and port == self.port
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -381,7 +407,7 @@ class BridgeServer:
             return
         try:
             payload = json.loads(request.body.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             payload = None
         device_id = payload.get("id") if isinstance(payload, dict) else None
         if not isinstance(device_id, str) or not device_id or len(device_id) > 200:

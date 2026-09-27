@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { beepIntervalMs, estimateDistance, heat, proximity, RssiFilter, signalBars, trend } from "../../web/js/engine/signal.js";
+import { beepIntervalMs, heat, proximity, RssiFilter, signalBars, trend } from "../../web/js/engine/signal.js";
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -57,7 +57,7 @@ test("proximity levels and boundaries", () => {
   assert.equal(proximity(-65).label, "Varm");
 });
 
-test("heat, bars, beep interval and distance are monotonic", () => {
+test("heat, bars and beep interval are monotonic", () => {
   assert.equal(heat(-100), 0);
   assert.equal(heat(-40), 1);
   assert.equal(heat(-20), 1);
@@ -67,10 +67,6 @@ test("heat, bars, beep interval and distance are monotonic", () => {
   assert.equal(beepIntervalMs(-100), 2000);
   assert.equal(beepIntervalMs(-40), 90);
   assert.ok(beepIntervalMs(-60) < beepIntervalMs(-80));
-  assert.ok(estimateDistance(-50) < estimateDistance(-70));
-  assert.equal(estimateDistance(-59), 1);
-  assert.equal(estimateDistance(undefined), null);
-  assert.ok(estimateDistance(-20) >= 0.1);
 });
 
 test("trend detects warmer, colder and steady", () => {

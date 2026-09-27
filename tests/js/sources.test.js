@@ -147,7 +147,7 @@ test("demo: following the iPad makes it warmer and its address rotation is re-ac
       }
     }
   }
-  assert.deepEqual(reacquired, { fromId: "demo-ipad", toId: "demo-ipad-2" });
+  assert.deepEqual(reacquired, { fromId: "demo-ipad", toId: "demo-ipad-2", strong: true });
   const after = tracker.get(tracker.followedId).smoothed;
   assert.ok(after > before + 20, `expected warmer: before ${before}, after ${after}`);
 });
@@ -161,4 +161,19 @@ test("demo identify answers like the bridge", async () => {
   assert.equal(refused.ok, false);
   assert.equal(refused.error.code, "connect_failed");
   assert.equal((await demo.identify("nope")).error.code, "not_found");
+});
+
+test("Web Bluetooth source asks for a restart when Android pauses the scan", async () => {
+  const nav = fakeNavigator();
+  const source = createWebBluetoothSource({ onAdverts: () => {}, onStatus: () => {}, batchMs: 10, nav });
+  assert.equal(source.needsRestart(), false, "not scanning yet");
+  await source.start();
+  const now = Date.now();
+  assert.equal(source.needsRestart(now), false);
+  assert.equal(source.needsRestart(now + 25000), true, "no adverts for a while");
+  for (const fn of nav.listeners) fn({ device: { id: "d1" }, rssi: -50 });
+  assert.equal(source.needsRestart(Date.now() + 5000), false, "adverts are flowing");
+  assert.equal(source.needsRestart(now + 10 * 60 * 1000), true, "Android's ~10 minute limit");
+  source.stop();
+  assert.equal(source.needsRestart(), false);
 });

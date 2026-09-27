@@ -130,8 +130,16 @@ try {
     check((await samsung.locator(".identify-result").innerText()).includes("tillod ikke forbindelse"), "failed identify shows a Danish explanation");
 
     await page.locator('.device[data-id="AA:BB:CC:00:00:02"] [data-action="hide"]').click();
+    await page.mouse.move(0, 0);
     await page.waitForTimeout(700);
     check((await page.locator('.device[data-id="AA:BB:CC:00:00:02"]').count()) === 0, "hidden device disappears from the list");
+    check((await page.locator("#toast").innerText()).includes("er skjult"), "hide toast names what was hidden");
+    await page.locator("#toast .toast-action").click();
+    await page.waitForTimeout(700);
+    check((await page.locator('.device[data-id="AA:BB:CC:00:00:02"]').count()) === 1, "'Fortryd' brings a hidden device back");
+    await page.locator('.device[data-id="AA:BB:CC:00:00:02"] [data-action="hide"]').click();
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(700);
     check((await page.locator('[data-count="hidden"]').innerText()) === "1", "hidden counter shows 1");
     await page.locator("#show-hidden").check();
     await page.waitForTimeout(700);
@@ -156,16 +164,24 @@ try {
     await page.locator("#sound-btn").click();
     check((await page.locator("#sound-btn").getAttribute("aria-pressed")) === "true", "sound can be switched on");
     await page.screenshot({ path: join(shots, "bridge-follow.png") });
+    // Keyboard focus must stay inside the follow view.
+    let escaped = false;
+    for (let i = 0; i < 25; i += 1) {
+      await page.keyboard.press(i % 2 ? "Tab" : "Shift+Tab");
+      if (!(await page.evaluate(() => document.getElementById("follow").contains(document.activeElement) || document.activeElement === document.body))) escaped = true;
+    }
+    check(!escaped, "Tab never leaves the follow view (background is inert)");
+    check(await page.evaluate(() => document.querySelector("main").inert === true), "the list behind the follow view is inert");
+    await page.evaluate(() => document.body.focus());
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
     check(await page.locator("#follow").isHidden(), "Escape closes the follow view");
-
-    await page.locator("#pause-btn").click();
-    check((await page.locator("#status").getAttribute("data-state")) === "paused", "pause button pauses");
-    await page.locator("#pause-btn").click();
+    check(await page.evaluate(() => document.querySelector("main").inert === false), "the list is usable again after closing");
 
     await page.locator("#help-btn").click();
     check(await page.locator("#help-dialog").isVisible(), "help dialog opens");
+    check((await page.evaluate(() => document.getElementById("help-dialog").scrollTop)) === 0, "help dialog opens at the top");
+    check((await page.evaluate(() => document.activeElement?.id)) === "help-title", "help dialog focuses its title");
     await page.screenshot({ path: join(shots, "help.png") });
     await page.locator('#help-dialog button[value="close"]').click();
 
@@ -204,10 +220,45 @@ try {
     await page.waitForSelector(".device");
     await page.waitForTimeout(1500);
     check(await noHorizontalScroll(page), "no horizontal scrolling at 360 px (list)");
+    check(
+      await page.evaluate(() => {
+        const el = document.querySelector(".segmented");
+        return el.scrollWidth <= el.clientWidth + 1;
+      }),
+      "filter buttons fit at 360 px",
+    );
+    // Keyboard focus survives the list re-sorting underneath it.
+    await page.locator('[data-filter="all"]').click();
+    await page.locator('.device [data-action="hide"]').last().focus();
+    const focusedId = await page.evaluate(() => document.activeElement.closest(".device").dataset.id);
+    await page.waitForTimeout(5000);
+    check(
+      (await page.evaluate(() => document.activeElement?.closest?.(".device")?.dataset.id)) === focusedId,
+      "focus stays on the same card while the list updates",
+    );
+    await page.locator('[data-filter="candidates"]').click();
     await page.locator('.device [data-action="follow"]').first().click();
     await page.waitForTimeout(800);
     check(await noHorizontalScroll(page), "no horizontal scrolling at 360 px (follow view)");
     await page.screenshot({ path: join(shots, "demo-follow-360.png") });
+    await page.close();
+  }
+
+  // ---------------------------------------------------------------- opened as a file
+  console.log("Opened directly from disk (file://)");
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`file://${join(root, "web", "index.html")}`);
+    await page.waitForTimeout(3500);
+    check(await page.locator("#boot-fallback").isVisible(), "file:// shows how to start the program instead of a dead page");
+    check((await page.evaluate(() => getComputedStyle(document.getElementById("boot-fallback")).opacity)) === "1", "file:// fallback is fully visible");
+    await page.close();
+  }
+  {
+    const page = await browser.newPage();
+    await page.goto(`http://127.0.0.1:${bridgePort}/`);
+    await page.waitForTimeout(3000);
+    check((await page.locator("#boot-fallback").count()) === 0, "the fallback message is removed when the app starts");
     await page.close();
   }
 

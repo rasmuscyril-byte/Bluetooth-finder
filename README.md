@@ -29,8 +29,8 @@ Du skal bruge en computer med Bluetooth – helst en bærbar, så du kan gå run
 
 ### Windows
 
-1. Har du ikke Python, så hent det på [python.org/downloads](https://www.python.org/downloads/).
-   Sæt flueben i **"Add python.exe to PATH"** under installationen.
+1. Har du ikke Python, så hent det på [python.org/downloads](https://www.python.org/downloads/) og installer det.
+   Bruger du den klassiske installer, så sæt flueben i **"Add python.exe to PATH"**.
 2. Dobbeltklik på **`start-windows.bat`**. Viser Windows en blå boks ("Windows beskyttede din pc"),
    så tryk **Flere oplysninger → Kør alligevel**.
 3. Første gang henter programmet Bluetooth-biblioteket *bleak* (kræver internet, tager et minuts tid).
@@ -45,10 +45,10 @@ Du skal bruge en computer med Bluetooth – helst en bærbar, så du kan gå run
    Spørger den ikke, så gå til **Systemindstillinger → Anonymitet og sikkerhed → Bluetooth** og slå Terminal til.
 3. Browseren åbner af sig selv.
 
-Virker dobbeltklik ikke, så åbn Terminal og skriv (ret stien, så den passer til hvor du pakkede ud):
+Virker dobbeltklik ikke, så åbn **Terminal** (Programmer → Hjælpeprogrammer), skriv `cd ` (med et mellemrum
+bagefter), træk den udpakkede mappe ind i Terminal-vinduet, og tryk Enter. Skriv derefter:
 
 ```bash
-cd ~/Downloads/Bluetooth-finder-main
 bash start-mac.command
 ```
 
@@ -70,16 +70,20 @@ Chrome på Android kan scanne Bluetooth direkte fra en hjemmeside, hvis du slår
 1. Skriv `chrome://flags` i adresselinjen, søg efter **Experimental Web Platform features**, vælg **Enabled** og genstart Chrome.
 2. Åbn iPad-finder-siden via **https** (se nedenfor) og tryk **Start scanning**. Tillad Bluetooth (og placering).
 
-Siden kan lægges på nettet gratis med GitHub Pages: gå til repoets **Settings → Pages**, vælg
-**Deploy from a branch**, vælg grenen og mappen **/ (root)**, og gem. Så ligger siden på
-`https://rasmuscyril-byte.github.io/Bluetooth-finder/`.
+Siden kan lægges på nettet med GitHub Pages. Det er gratis for offentlige repositories – er dit repository privat,
+kræver Pages et betalt GitHub-abonnement, eller at du gør det offentligt (**Settings → General → Change visibility**).
+Gå derefter til **Settings → Pages**, vælg **Deploy from a branch**, vælg grenen og mappen **/ (root)**, og gem.
+Så ligger siden på `https://rasmuscyril-byte.github.io/Bluetooth-finder/`.
 
 > iPhone og iPad kan ikke scanne Bluetooth fra en hjemmeside – Apple tillader det ikke. Brug en computer eller en Android-telefon.
 
 ### Vil du bare se, hvordan det ser ud?
 
-Start programmet med `--demo` (fx `start-windows.bat --demo` fra kommandoprompten eller
-`bash start-mac.command --demo`). Så vises nogle simulerede enheder, og du kan prøve varm/kold-måleren uden Bluetooth.
+Start programmet med `--demo`. Så vises nogle simulerede enheder, og du kan prøve varm/kold-måleren uden Bluetooth:
+
+- **Windows:** Åbn den udpakkede mappe i Stifinder, klik i adresselinjen, skriv `cmd` og tryk Enter.
+  Skriv så `start-windows.bat --demo`.
+- **Mac:** `bash start-mac.command --demo` (i Terminal, som beskrevet ovenfor).
 
 ---
 
@@ -112,7 +116,7 @@ Start programmet med `--demo` (fx `start-windows.bat --demo` fra kommandoprompte
 | På kortet står der | Det betyder |
 | --- | --- |
 | **iPhone, iPad eller Mac** | En Apple-enhed. Ud fra signalet alene kan man ikke se forskel – brug *Identificér* eller udelukkelsesmetoden. |
-| **iPad** · *sandsynlig* | Enheden har selv fortalt, at den er en iPad (fx efter "Hej Siri", via en Microsoft-app eller dens navn). |
+| **iPad** · *sandsynlig* | Enheden har selv fortalt, at den er en iPad (fx efter "Hej Siri" eller via dens navn). |
 | **iPad** · *sikker* | *Identificér* gav et modelnummer, der starter med "iPad". |
 | **… uden internet (Find My)** | En Apple-enhed uden internetforbindelse. God kandidat, hvis iPad'en er væk hjemmefra. |
 | *Låst / ikke i brug*, *I brug lige nu* … | Hvad enheden laver lige nu (ifølge dens eget signal). |
@@ -124,7 +128,7 @@ Start programmet med `--demo` (fx `start-windows.bat --demo` fra kommandoprompte
 
 - **iPad'en skal være tændt.** Er batteriet fladt, sender den intet. (Nyere iPhones kan findes et stykke tid efter,
   de er slukket – det kan iPads så vidt vides ikke.)
-- **Flytilstand eller slukket Bluetooth** betyder intet signal.
+- **Slukket Bluetooth** betyder intet signal. (Flytilstand alene slukker normalt ikke Bluetooth på en iPad.)
 - En låst iPad, der ligger helt stille, kan sende sjældnere. Væk den med et FaceTime-opkald eller en besked.
 - **Afstanden er kun et skøn.** Vægge, møbler, vand (og mennesker) gør signalet svagere. Følg hellere
   *varmere/koldere* end metertallet.
@@ -145,7 +149,7 @@ Start programmet med `--demo` (fx `start-windows.bat --demo` fra kommandoprompte
 | Windows: ingen enheder | Computeren skal have Bluetooth 4.0 eller nyere (Bluetooth Low Energy) og Windows 10 (1709) eller nyere. |
 | Linux: "Bluetooth-tjenesten svarer ikke" | `sudo systemctl start bluetooth` |
 | Browseren åbner ikke | Åbn adressen, der står i vinduet (normalt `http://127.0.0.1:8765/`). |
-| Virker Bluetooth overhovedet? | Kør `start-windows.bat --check` (Windows, fra kommandoprompten) eller `bash start-mac.command --check` (Mac). Den scanner i 10 sekunder og skriver, hvad den fandt. |
+| Virker Bluetooth overhovedet? | Kør `start-windows.bat --check` (Windows: åbn mappen, skriv `cmd` i adresselinjen og tryk Enter) eller `bash start-mac.command --check` (Mac). Den scanner i 10 sekunder og skriver, hvad den fandt. |
 
 ---
 
@@ -175,7 +179,7 @@ Heinrich m.fl. (*Who Can Find My Devices?*, 2021) og Bluetooth SIG's *Assigned N
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pytest                      # Python-broen (uden rigtig Bluetooth)
-node --test tests/js/*.test.js        # afkodning, genkendelse, signal, tracker, kilder
+node --test                           # afkodning, genkendelse, signal, tracker, kilder
 node tests/e2e/run-e2e.mjs            # hele appen i en rigtig browser (kræver Playwright)
 python -m ipad_finder --demo          # demo i browseren
 ```

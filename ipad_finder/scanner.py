@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import sys
+import time
 from collections import OrderedDict
 from typing import Any, Callable, Optional
 
@@ -20,6 +22,8 @@ MODEL_NUMBER_CHAR = "00002a24-0000-1000-8000-00805f9b34fb"
 DEVICE_NAME_CHAR = "00002a00-0000-1000-8000-00805f9b34fb"
 
 MAX_REMEMBERED_DEVICES = 4000
+
+ADDRESS_LIKE = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f-]{36}$")
 
 # BlueZ only reports a new RSSI when it moved by >= 8 dB, unless a discovery
 # filter with an RSSI threshold is set. We need every reading for the meter.
@@ -116,28 +120,41 @@ class BleScanner:
         self._scanner: Any = None
         self._devices: OrderedDict[str, Any] = OrderedDict()
         self._lock: Optional[asyncio.Lock] = None
+        self._start_lock: Optional[asyncio.Lock] = None
         self._refresh_task: Optional[asyncio.Task[None]] = None
+        self._closed = False
+        self.started_at: Optional[float] = None
+        self.last_advert_at: Optional[float] = None
+
+    @property
+    def busy(self) -> bool:
+        """True while an identify is running (scanning is paused on purpose)."""
+        return self.identifying or (self._lock is not None and self._lock.locked())
 
     async def start(self) -> None:
         """Start scanning. Raises BluetoothUnavailable with a Danish message."""
-        if self.scanning:
-            return
-        try:
-            from bleak import BleakScanner
+        if self._start_lock is None:
+            self._start_lock = asyncio.Lock()
+        async with self._start_lock:  # never start the same bleak scanner twice
+            if self.scanning or self._closed:
+                return
+            try:
+                from bleak import BleakScanner
 
-            if self._scanner is None:
-                self._scanner = BleakScanner(detection_callback=self._detected, bluez=BLUEZ_ARGS)
-            await self._scanner.start()
-        except Exception as exc:  # bleak raises many different types per platform
-            self._scanner = None
-            code, message = describe_error(exc)
-            self.error = {"code": code, "message": message}
-            log.debug("Scanner start failed", exc_info=True)
-            raise BluetoothUnavailable(code, message) from exc
-        self.scanning = True
-        self.error = None
-        if sys.platform == "darwin" and not self._allow_duplicates_macos() and self._refresh_task is None:
-            self._refresh_task = asyncio.ensure_future(self._refresh_loop())
+                if self._scanner is None:
+                    self._scanner = BleakScanner(detection_callback=self._detected, bluez=BLUEZ_ARGS)
+                await self._scanner.start()
+            except Exception as exc:  # bleak raises many different types per platform
+                self._scanner = None
+                code, message = describe_error(exc)
+                self.error = {"code": code, "message": message}
+                log.debug("Scanner start failed", exc_info=True)
+                raise BluetoothUnavailable(code, message) from exc
+            self.scanning = True
+            self.error = None
+            self.started_at = time.monotonic()
+            if sys.platform == "darwin" and not self._allow_duplicates_macos() and self._refresh_task is None:
+                self._refresh_task = asyncio.ensure_future(self._refresh_loop())
 
     async def stop(self) -> None:
         if self._refresh_task is not None:
@@ -149,6 +166,20 @@ class BleScanner:
             except Exception:
                 log.debug("Scanner stop failed", exc_info=True)
         self.scanning = False
+
+    async def restart(self) -> None:
+        """Stop and start again, e.g. when the scan died silently (Bluetooth toggled, sleep)."""
+        await self.stop()
+        self._scanner = None  # a fresh bleak scanner picks up a re-plugged/re-enabled adapter
+        try:
+            await self.start()
+        except BluetoothUnavailable as exc:
+            log.warning("Bluetooth: %s", exc.message)
+
+    async def shutdown(self) -> None:
+        """Stop for good: a running identify will not resume scanning afterwards."""
+        self._closed = True
+        await self.stop()
 
     def _allow_duplicates_macos(self) -> bool:
         """Ask CoreBluetooth to report every advert, not just the first one.
@@ -180,6 +211,7 @@ class BleScanner:
                 log.debug("Scan refresh failed", exc_info=True)
 
     def _detected(self, device: Any, adv: Any) -> None:
+        self.last_advert_at = time.monotonic()
         self._remember(device)
         callback = self.on_advert
         if callback is None:
@@ -212,21 +244,27 @@ class BleScanner:
                 return identify_error(device_id, "not_found")
             was_scanning = self.scanning
             self.identifying = True
+            cancelled = False
             try:
                 await self.stop()
                 info = await asyncio.wait_for(self._read_info(device), self.identify_timeout)
             except asyncio.TimeoutError:
                 return identify_error(device_id, "timeout")
+            except asyncio.CancelledError:
+                cancelled = True  # shutting down: do not start scanning again
+                raise
             except Exception:
                 log.debug("Identify failed", exc_info=True)
                 return identify_error(device_id, "connect_failed")
             finally:
-                self.identifying = False
-                if was_scanning:
-                    try:
+                try:
+                    if was_scanning and not cancelled and not self._closed:
                         await self.start()
-                    except BluetoothUnavailable:
-                        log.warning("Could not resume scanning after identify")
+                except BluetoothUnavailable:
+                    log.warning("Could not resume scanning after identify")
+                finally:
+                    # Only now, so the server's supervisor never starts a second scan meanwhile.
+                    self.identifying = False
             if not any(info.values()):
                 return identify_error(device_id, "no_info")
             return {"ok": True, "id": device_id, **info}
@@ -247,6 +285,13 @@ class BleScanner:
                     info[key] = _decode_text(await client.read_gatt_char(uuid))
                 except Exception:
                     log.debug("Could not read %s", key, exc_info=True)
+            if info["name"] is None:
+                # macOS hides the GAP service but CoreBluetooth reports the name
+                # of a connected peripheral (bleak >= 1.1). Ignore address-like
+                # aliases such as BlueZ's "AA-BB-CC-DD-EE-FF".
+                name = getattr(client, "name", None)
+                if isinstance(name, str) and name.strip() and not ADDRESS_LIKE.match(name.strip()):
+                    info["name"] = name.strip()
         finally:
             try:
                 await client.disconnect()

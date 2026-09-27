@@ -10,9 +10,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = ["bleak>=1.0,<4"]
 
-[project.scripts]
-ipad-finder = "ipad_finder.cli:main"
-
+# Run from the source tree (python -m ipad_finder): the web app in web/ is
+# served from next to the package and is not part of an installed wheel.
 [tool.setuptools]
 packages = ["ipad_finder"]
 

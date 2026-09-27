@@ -50,10 +50,13 @@ function describeError(error) {
     return "Scanning blev ikke tilladt. Giv siden adgang til Bluetooth og prøv igen (siden skal åbnes via https).";
   }
   if (name === "NotFoundError" || name === "NotSupportedError") {
-    return "Telefonens Bluetooth er slået fra eller kan ikke bruges. Slå Bluetooth (og placering) til og prøv igen.";
+    return (
+      "Bluetooth er slået fra, eller Chrome mangler tilladelse. Slå Bluetooth til, og giv Chrome tilladelsen " +
+      "'Enheder i nærheden' (Android: Indstillinger → Apps → Chrome → Tilladelser). Prøv så igen."
+    );
   }
   if (name === "InvalidStateError") {
-    return "Bluetooth er optaget. Luk andre sider, der bruger Bluetooth, og prøv igen.";
+    return "Spørgsmålet om tilladelse blev afbrudt, før scanningen gik i gang. Prøv igen.";
   }
   return `Scanning kunne ikke starte: ${error?.message || name || "ukendt fejl"}`;
 }
@@ -63,6 +66,8 @@ export function createWebBluetoothSource({ onAdverts, onStatus, batchMs = 250, n
   let pending = [];
   let timer = null;
   let handler = null;
+  let startedAt = null;
+  let lastAdvertAt = null;
 
   function flush() {
     if (!pending.length) return;
@@ -93,6 +98,7 @@ export function createWebBluetoothSource({ onAdverts, onStatus, batchMs = 250, n
       onStatus({ state: "starting", message: null });
       handler = (event) => {
         const raw = advertisementEventToRaw(event);
+        lastAdvertAt = Date.now();
         if (raw) pending.push(raw);
         if (pending.length > 4000) pending.splice(0, pending.length - 4000);
       };
@@ -105,7 +111,21 @@ export function createWebBluetoothSource({ onAdverts, onStatus, batchMs = 250, n
         throw error;
       }
       timer = setInterval(flush, batchMs);
+      startedAt = Date.now();
+      lastAdvertAt = null;
       onStatus({ state: "scanning", message: null });
+    },
+
+    /**
+     * Android moves long-running unfiltered scans to "opportunistic" mode after
+     * about 10 minutes (and stops them when the screen is off). A restart needs a
+     * user gesture, so the UI asks for one when this returns true.
+     */
+    needsRestart(now = Date.now()) {
+      if (!scan?.active || startedAt === null) return false;
+      if (now - startedAt > 9 * 60 * 1000) return true;
+      const quietSince = lastAdvertAt ?? startedAt;
+      return now - quietSince > 20000;
     },
 
     stop() {

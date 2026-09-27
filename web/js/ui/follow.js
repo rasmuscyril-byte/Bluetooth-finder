@@ -1,6 +1,6 @@
 // The "Find den" view: a big hot/cold gauge, trend, sparkline and warnings.
 
-import { estimateDistance, heat, proximity, trend } from "../engine/signal.js";
+import { heat, proximity, trend } from "../engine/signal.js";
 import { $, formatAgo, formatDbm, setText, shortId } from "./dom.js";
 import { identifyText } from "./list.js";
 
@@ -35,13 +35,24 @@ export function createFollowView(root, { onClose, onStop, onIdentify, onSound })
   $("#stop-btn", root).addEventListener("click", () => onStop());
   els.sound.addEventListener("click", () => onSound());
   els.identify.addEventListener("click", () => onIdentify());
-  root.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") onClose();
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !root.hidden) onClose();
   });
+
+  // Everything behind the view is made inert, so keyboard and screen-reader
+  // users cannot reach (or click) the hidden list while the dialog is open.
+  function setBackgroundInert(inert) {
+    for (const el of document.body.children) {
+      if (el === root || el.id === "toast" || el.id === "sr-live" || el.tagName === "DIALOG" || el.tagName === "SCRIPT") continue;
+      if (inert) el.setAttribute("inert", "");
+      else el.removeAttribute("inert");
+    }
+  }
 
   function open() {
     returnFocus = document.activeElement;
     root.hidden = false;
+    setBackgroundInert(true);
     document.body.style.overflow = "hidden";
     lastAnnounced = { level: null, t: 0 };
     $("#follow-close", root).focus();
@@ -49,6 +60,7 @@ export function createFollowView(root, { onClose, onStop, onIdentify, onSound })
 
   function close() {
     root.hidden = true;
+    setBackgroundInert(false);
     document.body.style.overflow = "";
     if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
     returnFocus = null;
@@ -77,7 +89,8 @@ export function createFollowView(root, { onClose, onStop, onIdentify, onSound })
     const c = device.classification || {};
     const now = ctx.now;
     const age = now - device.lastSeen;
-    const lost = age > LOST_AFTER_MS;
+    // Find My adverts come only every ~2 s (and some get lost), so allow for slow senders.
+    const lost = age > Math.max(LOST_AFTER_MS, (device.advIntervalMs ?? 0) * 4);
     const smoothed = device.smoothed;
     const level = proximity(smoothed);
     const h = lost ? 0 : heat(smoothed);
@@ -100,9 +113,7 @@ export function createFollowView(root, { onClose, onStop, onIdentify, onSound })
     } else {
       setText(els.level, level.label);
       setText(els.dbm, formatDbm(smoothed));
-      const meters = estimateDistance(smoothed);
-      const distance = meters === null ? "" : `: ~${meters < 10 ? meters.toFixed(1).replace(".", ",") : Math.round(meters)}\u00a0m`;
-      setText(els.hint, `${level.hint} (skøn${distance})`);
+      setText(els.hint, `${level.hint} (groft skøn)`);
     }
 
     const samples = device.history.map((sample) => ({ t: sample.t, v: sample.smoothed }));

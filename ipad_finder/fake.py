@@ -46,6 +46,10 @@ class FakeScanner:
         self.error: Optional[dict[str, str]] = None
         self.fail_start: Optional[tuple[str, str]] = None
         self.identify_calls: list[str] = []
+        self.busy = False
+        self.started_at: Optional[float] = None
+        self.last_advert_at: Optional[float] = None
+        self.restarts = 0
         self._random = random.Random(seed)
         self._rssi = {device[0]: float(device[4]) for device in CANNED_DEVICES}
         self._task: Optional[asyncio.Task[None]] = None
@@ -60,6 +64,7 @@ class FakeScanner:
             raise BluetoothUnavailable(code, message)
         self.scanning = True
         self.error = None
+        self.started_at = time.monotonic()
         if self._autostart_emitting and self._task is None:
             self._task = asyncio.ensure_future(self._run())
 
@@ -73,8 +78,20 @@ class FakeScanner:
                 pass
             self._task = None
 
+    async def restart(self) -> None:
+        self.restarts += 1
+        await self.stop()
+        try:
+            await self.start()
+        except Exception:
+            pass
+
+    async def shutdown(self) -> None:
+        await self.stop()
+
     def emit(self, advert: dict[str, Any]) -> None:
         """Push one RawAdvert (tests)."""
+        self.last_advert_at = time.monotonic()
         if self.on_advert is not None:
             self.on_advert(advert)
 

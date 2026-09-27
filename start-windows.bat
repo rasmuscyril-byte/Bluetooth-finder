@@ -8,6 +8,7 @@ title iPad-finder
 echo.
 echo   iPad-finder
 echo   -----------
+echo   Leder efter Python ...
 
 set "PY="
 where py >nul 2>nul
@@ -21,23 +22,29 @@ if not defined PY (
 )
 if not defined PY goto :nopython
 
-if not exist ".venv\Scripts\python.exe" (
+rem The Python environment lives outside the unpacked folder: long folder
+rem names from the ZIP could otherwise exceed Windows' 260-character path limit.
+set "VENV=%LOCALAPPDATA%\ipad-finder\venv"
+if not defined LOCALAPPDATA set "VENV=%~dp0.venv"
+
+"%VENV%\Scripts\python.exe" -m pip --version >nul 2>nul
+if errorlevel 1 (
   echo   Gør klar første gang - det tager et minuts tid ...
-  %PY% -m venv .venv
+  %PY% -m venv --clear "%VENV%"
   if errorlevel 1 goto :fail
 )
 
-".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt
+"%VENV%\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt
 if errorlevel 1 goto :fail
 
-".venv\Scripts\python.exe" -m ipad_finder %*
+"%VENV%\Scripts\python.exe" -m ipad_finder %*
 if errorlevel 1 pause
 exit /b 0
 
 :nopython
 echo   Python 3.9 eller nyere blev ikke fundet.
-echo   Installer Python fra https://www.python.org/downloads/
-echo   Husk at sætte flueben i "Add python.exe to PATH" under installationen.
+echo   Hent Python på https://www.python.org/downloads/ og installer det.
+echo   Bruger du den klassiske installer, så sæt flueben i "Add python.exe to PATH".
 echo   Dobbeltklik derefter på denne fil igen.
 start "" "https://www.python.org/downloads/"
 pause
@@ -46,6 +53,6 @@ exit /b 1
 :fail
 echo.
 echo   Noget gik galt under installationen - se fejlbeskeden ovenfor.
-echo   Er du på internettet? Første start skal hente Bluetooth-biblioteket "bleak".
+echo   Første start skal hente Bluetooth-biblioteket "bleak", så computeren skal være på internettet.
 pause
 exit /b 1

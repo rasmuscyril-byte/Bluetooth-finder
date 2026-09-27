@@ -290,3 +290,98 @@ def test_macos_falls_back_to_restarting_the_scan(fake_bleak, monkeypatch):
         assert bleak_scanner.stopped == stopped
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("client_name, expected", [("Rasmus’ iPad", "Rasmus’ iPad"), ("AA-BB-CC-DD-EE-FF", None), ("", None), (None, None)])
+def test_identify_falls_back_to_client_name(fake_bleak, client_name, expected):
+    FakeBleakClient.reads = {scanner_module.MODEL_NUMBER_CHAR: b"iPad13,1"}
+    FakeBleakClient.name = client_name
+
+    async def scenario():
+        scanner = BleScanner()
+        await scanner.start()
+        address = seen_device(scanner)
+        return await scanner.identify(address)
+
+    try:
+        result = asyncio.run(scenario())
+    finally:
+        del FakeBleakClient.name
+    assert result["ok"] is True
+    assert result["model"] == "iPad13,1"
+    assert result["name"] == expected
+
+
+def test_concurrent_starts_start_bleak_once(fake_bleak):
+    class SlowScanner(FakeBleakScanner):
+        async def start(self):
+            await asyncio.sleep(0.05)
+            await super().start()
+
+    fake_bleak.BleakScanner = SlowScanner
+
+    async def scenario():
+        scanner = BleScanner()
+        await asyncio.gather(scanner.start(), scanner.start(), scanner.start())
+        assert scanner.scanning
+        assert len(FakeBleakScanner.instances) == 1
+        assert FakeBleakScanner.instances[0].started == 1
+
+    asyncio.run(scenario())
+
+
+def test_identify_keeps_busy_until_scanning_resumed(fake_bleak):
+    FakeBleakClient.reads = {scanner_module.MODEL_NUMBER_CHAR: b"iPad13,1"}
+    observed = []
+
+    class ObservingScanner(FakeBleakScanner):
+        async def start(self):
+            observed.append(current.identifying)
+            await super().start()
+
+    fake_bleak.BleakScanner = ObservingScanner
+    current = None
+
+    async def scenario():
+        nonlocal current
+        current = BleScanner()
+        await current.start()
+        address = seen_device(current)
+        await current.identify(address)
+        assert not current.busy
+
+    asyncio.run(scenario())
+    # The restart after identify happens while still marked as identifying.
+    assert observed == [False, True]
+
+
+def test_cancelled_identify_does_not_restart_scanning(fake_bleak):
+    FakeBleakClient.behaviour = "hang"
+
+    async def scenario():
+        scanner = BleScanner(identify_timeout=5)
+        await scanner.start()
+        address = seen_device(scanner)
+        task = asyncio.ensure_future(scanner.identify(address))
+        await asyncio.sleep(0.05)
+        await scanner.shutdown()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not scanner.scanning
+        assert not scanner.identifying
+        assert FakeBleakScanner.instances[0].started == 1
+
+    asyncio.run(scenario())
+
+
+def test_restart_recreates_the_bleak_scanner(fake_bleak):
+    async def scenario():
+        scanner = BleScanner()
+        await scanner.start()
+        await scanner.restart()
+        assert scanner.scanning
+        assert len(FakeBleakScanner.instances) == 2
+        assert FakeBleakScanner.instances[0].stopped == 1
+
+    asyncio.run(scenario())

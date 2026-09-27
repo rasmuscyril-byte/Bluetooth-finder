@@ -136,12 +136,11 @@ export function serviceInfo(id) {
   return SERVICES.get(id) ?? null;
 }
 
-// Microsoft beacons (company 0x0006). CDP = Connected Devices Platform,
-// sent by Windows PCs and by phones/tablets running Microsoft apps.
+// Microsoft beacons (company 0x0006). CDP = Connected Devices Platform.
+// The protocol also defines iPhone (6) and iPad (7), but iOS/iPadOS apps
+// cannot put manufacturer data in adverts, so those never come from an iPad.
 const CDP_DEVICE_TYPES = new Map([
   [1, { kind: "tv", label: "Xbox" }],
-  [6, { kind: "iphone", label: "iPhone" }],
-  [7, { kind: "ipad", label: "iPad" }],
   [8, { kind: "android", label: "Android-enhed" }],
   [9, { kind: "computer", label: "Windows-pc" }],
   [11, { kind: "phone", label: "Windows-telefon" }],
@@ -155,7 +154,7 @@ export function parseMicrosoftBeacon(bytes) {
   if (!bytes || bytes.length < 1) return null;
   if (bytes[0] === 0x03) return { scenario: "swiftPair", deviceType: null, device: null };
   if (bytes[0] === 0x01 && bytes.length >= 2) {
-    const deviceType = bytes[1] & 0x1f;
+    const deviceType = bytes[1] & 0x3f; // top two bits are the version
     return { scenario: "cdp", deviceType, device: CDP_DEVICE_TYPES.get(deviceType) ?? null };
   }
   return { scenario: null, deviceType: null, device: null };

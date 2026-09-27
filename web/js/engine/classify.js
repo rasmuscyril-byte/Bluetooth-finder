@@ -89,15 +89,24 @@ function fromModel(model) {
 function fromName(name, isApple) {
   const n = String(name || "").toLowerCase();
   if (!n) return null;
-  if (n.includes("ipad")) return ["ipad", "iPad"];
-  if (n.includes("iphone")) return ["iphone", "iPhone"];
+  // "Keyboard for iPad", "iPad Pro Case" … are accessories, not the iPad.
+  const accessory = /keyboard|tastatur|case|cover|pencil|stylus|for ipad|til ipad|charger|oplader|magic/.test(n);
+  if (n.includes("ipad") && !accessory) return ["ipad", "iPad"];
+  if (n.includes("iphone") && !accessory) return ["iphone", "iPhone"];
   if (/macbook|imac|mac mini|mac studio|mac pro/.test(n)) return ["mac", "Mac"];
   if (n.includes("airpods")) return ["airpods", "AirPods"];
   if (n.includes("apple watch") || (isApple && n.includes("watch"))) return ["apple-watch", "Apple Watch"];
+  if (accessory) return ["accessory", "Tilbehør"];
+  // Specific product families first, brand names (galaxy, oppo …) last.
+  if (/galaxy book|matebook|magicbook|chromebook|thinkpad|laptop|notebook/.test(n)) return ["computer", "Computer"];
   if (/galaxy tab|\btab s\d|tablet|\bpad\b|mediapad|matepad/.test(n)) return ["tablet", "Tablet"];
-  if (/buds|headphone|earbuds|\bjbl\b|bose|\bwh-|\bwf-|beats|jabra|sennheiser/.test(n)) return ["headphones", "Høretelefoner"];
-  if (/watch|\bband\b|fitbit|garmin|forerunner|fenix|amazfit|mi band/.test(n)) return ["wearable", "Ur/fitness"];
-  if (/galaxy|pixel|oneplus|xiaomi|redmi|poco|huawei|honor|motorola|\bmoto\b|nokia|oppo|vivo|realme|nothing phone|xperia|\bphone\b/.test(n)) {
+  if (/buds|headphone|earbuds|\benco\b|freebuds|\bjbl\b|bose|\bwh-|\bwf-|beats|jabra|sennheiser/.test(n)) {
+    return ["headphones", "Høretelefoner"];
+  }
+  if (/watch|\bband\b|galaxy fit|galaxy ring|fitbit|garmin|forerunner|fenix|vivoactive|vivosmart|vivomove|\bvenu\b|amazfit|mi band/.test(n)) {
+    return ["wearable", "Ur/fitness"];
+  }
+  if (/galaxy|pixel|oneplus|xiaomi|redmi|poco|huawei|honor|motorola|\bmoto\b|nokia|oppo|\bvivo\b|realme|nothing phone|xperia|\bphone\b/.test(n)) {
     return ["phone", "Telefon"];
   }
   if (/\btv\b|bravia|chromecast/.test(n)) return ["tv", "TV"];
@@ -217,12 +226,10 @@ export function classify(input = {}) {
   // 3. Apple Continuity.
   if (isApple) return classifyApple(apple, extra, hints?.deviceClass ?? null);
 
-  // 4. Other manufacturers. Microsoft's CDP beacon names the device type,
-  //    also for iPads and iPhones running Microsoft apps.
+  // 4. Other manufacturers. Microsoft's CDP beacon names the device type.
   if (microsoft?.device) {
     const { kind, label } = microsoft.device;
-    const viaApp = ["ipad", "iphone", "android"].includes(kind) ? "Fundet via Microsoft-app" : null;
-    return result(kind, label, { vendor: kind === "ipad" || kind === "iphone" ? "Apple" : "Microsoft", confidence: "sandsynlig", details: [...extra, viaApp] });
+    return result(kind, label, { vendor: "Microsoft", confidence: "sandsynlig", details: extra });
   }
   if (microsoft?.scenario === "swiftPair") {
     return result("accessory", "Tilbehør klar til parring (Swift Pair)", { vendor: "Microsoft", details: extra });

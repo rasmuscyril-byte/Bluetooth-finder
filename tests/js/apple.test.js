@@ -64,6 +64,11 @@ test("Find My: separated AirTag and offline Apple device", () => {
   assert.equal(apple.findMy.battery, "critical");
   assert.equal(apple.findMy.ownerConnected, true);
 
+  // iPhones in the wild send status 0x00: no battery information.
+  const iphone = parse("121900" + key + "0000");
+  assert.equal(iphone.findMy.deviceType, "apple");
+  assert.equal(iphone.findMy.battery, null);
+
   const nearby = parse("12022001");
   assert.equal(nearby.findMy.variant, "nearby");
   assert.equal(nearby.findMy.deviceType, "accessory");

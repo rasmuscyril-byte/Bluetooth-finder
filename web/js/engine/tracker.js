@@ -11,7 +11,24 @@ import { parseMicrosoftBeacon } from "./vendors.js";
 const MICROSOFT_COMPANY_ID = 0x0006;
 
 const MAX_DEVICES = 1500;
+// Window around the moment the followed device fell silent in which a new
+// address counts as "the same device after an address rotation".
+const ROTATION_BEFORE_MS = 3000;
+const ROTATION_AFTER_MS = 15000;
 const MAX_LINK_KEYS = 24;
+
+function knownClass(device) {
+  const kind = device.classification?.kind;
+  if (device.identity?.model || device.hints.deviceClass) return kind;
+  return null;
+}
+
+/** True when both devices are known to be different kinds (e.g. iPad vs iPhone). */
+function conflictingClass(a, b) {
+  const classA = knownClass(a);
+  const classB = knownClass(b);
+  return Boolean(classA && classB && classA !== classB);
+}
 
 function validRssi(rssi) {
   // 127 means "not available" in the HCI spec; 0 is reported by some stacks when unknown.
@@ -122,7 +139,10 @@ export class Tracker {
 
   _updateData(device, raw) {
     const manufacturerData = raw.manufacturerData && typeof raw.manufacturerData === "object" ? raw.manufacturerData : {};
-    const serviceUuids = Array.isArray(raw.serviceUuids) ? raw.serviceUuids : [];
+    // Beacons often carry their 16-bit UUID only as service data (Samsung 0xFD69,
+    // Quick Share 0xFEF3, Fast Pair 0xFE2C …), so count those UUIDs too.
+    const serviceDataUuids = raw.serviceData && typeof raw.serviceData === "object" ? Object.keys(raw.serviceData) : [];
+    const serviceUuids = [...(Array.isArray(raw.serviceUuids) ? raw.serviceUuids : []), ...serviceDataUuids];
     const dataKey = JSON.stringify([manufacturerData, serviceUuids, device.name]);
     if (dataKey === device._dataKey && device.classification) return;
     device._dataKey = dataKey;
@@ -188,20 +208,25 @@ export class Tracker {
   _reacquire(now) {
     const followed = this._followedId ? this._devices.get(this._followedId) : null;
     if (!followed || !(followed.fingerprint || followed.linkKeys.length)) return null;
-    if (now - followed.lastSeen <= this.reacquireAfterMs) return null;
+    if (now - followed.lastSeen <= Math.max(this.reacquireAfterMs, (followed.advIntervalMs ?? 0) * 4)) return null;
+    // An address rotation shows up as a new device right around the moment the
+    // old one fell silent. Later newcomers are other devices rotating.
     const fresh = [];
     for (const device of this._devices.values()) {
       if (device.id === followed.id || device.stale) continue;
       if (this._hidden.has(device.id)) continue;
-      if (device.firstSeen < followed.lastSeen - 3000) continue;
+      if (device.firstSeen < followed.lastSeen - ROTATION_BEFORE_MS) continue;
+      if (device.firstSeen > followed.lastSeen + ROTATION_AFTER_MS) continue;
+      if (conflictingClass(followed, device)) continue;
       fresh.push(device);
     }
     // Strong: the new address repeated a Nearby Info auth tag or Handoff data
     // that we last heard from the old address.
     const followedKeys = new Set(followed.linkKeys);
     let candidates = fresh.filter((device) => device.linkKeys.some((key) => followedKeys.has(key)));
+    const strong = candidates.length > 0;
     // Soft: same stable fields and a similar signal level – only if unique.
-    if (candidates.length === 0 && followed.fingerprint) {
+    if (!strong && followed.fingerprint) {
       candidates = fresh.filter(
         (device) => device.fingerprint === followed.fingerprint && Math.abs(device.smoothed - followed.smoothed) <= 20,
       );
@@ -209,11 +234,15 @@ export class Tracker {
     if (candidates.length !== 1) return null;
     const next = candidates[0];
     next.previousIds = [...followed.previousIds, followed.id].slice(-20);
-    if (!next.hints.deviceClass && followed.hints.deviceClass) next.hints.deviceClass = followed.hints.deviceClass;
-    if (followed.identity && !next.identity) next.identity = followed.identity;
-    this._classify(next);
+    // Only a strong link proves it is the same device; a soft match never
+    // inherits what was learned about the old address (e.g. "iPad · sikker").
+    if (strong) {
+      if (!next.hints.deviceClass && followed.hints.deviceClass) next.hints.deviceClass = followed.hints.deviceClass;
+      if (followed.identity && !next.identity) next.identity = followed.identity;
+      this._classify(next);
+    }
     this._followedId = next.id;
-    const event = { fromId: followed.id, toId: next.id };
+    const event = { fromId: followed.id, toId: next.id, strong };
     this._emit("reacquired", event);
     return event;
   }

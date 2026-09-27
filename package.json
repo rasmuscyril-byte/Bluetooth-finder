@@ -5,7 +5,7 @@
   "description": "Find en mistet iPad eller telefon ved at scanne Bluetooth-signaler (varm/kold-måler).",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/js/*.test.js",
+    "test": "node --test",
     "test:py": "python3 -m pytest tests/python -q",
     "e2e": "node tests/e2e/run-e2e.mjs"
   }

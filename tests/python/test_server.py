@@ -313,3 +313,72 @@ def test_explicit_host_is_allowed(web_root):
     assert server._host_allowed("192.168.1.20:8765")
     assert server._host_allowed("localhost:8765")
     assert not server._host_allowed("evil.example")
+
+
+def test_supervisor_restarts_a_silently_dead_scan(web_root, monkeypatch):
+    from ipad_finder import server as server_module
+
+    monkeypatch.setattr(server_module, "STALL_SECONDS", 0.5)
+    scanner = FakeScanner(autostart_emitting=False)
+
+    async def scenario(server):
+        await server.start_scanner()
+        for _ in range(40):
+            await asyncio.sleep(0.1)
+            if scanner.restarts:
+                break
+        assert scanner.restarts >= 1
+        assert scanner.scanning
+
+    run_with_server(scenario, scanner=scanner, web_root=web_root)
+
+
+def test_supervisor_leaves_a_busy_scanner_alone(web_root, monkeypatch):
+    from ipad_finder import server as server_module
+
+    monkeypatch.setattr(server_module, "RETRY_SECONDS", 1.0)
+    scanner = FakeScanner(autostart_emitting=False)
+
+    async def scenario(server):
+        scanner.busy = True  # identify in progress, scanning paused on purpose
+        await asyncio.sleep(2.5)
+        assert not scanner.scanning
+        scanner.busy = False
+        for _ in range(30):
+            await asyncio.sleep(0.1)
+            if scanner.scanning:
+                break
+        assert scanner.scanning
+
+    run_with_server(scenario, scanner=scanner, web_root=web_root)
+
+
+def test_hostile_identify_bodies_get_clean_answers(web_root):
+    async def scenario(server):
+        status, _, body = await identify_request(server.port, b"[" * 60000)
+        assert status == 400 and json.loads(body)["error"]["code"] == "bad_request"
+        status, _, _ = await identify_request(server.port, {"id": "x"}, origin="http://127.0.0.1:99999")
+        assert status == 403
+        status, _, _ = await identify_request(server.port, {"id": "x"}, origin="http://localhost:abc")
+        assert status == 403
+
+    run_with_server(scenario, web_root=web_root)
+
+
+def test_close_does_not_hang_on_a_client_that_stopped_reading(web_root):
+    scanner = FakeScanner(autostart_emitting=False)
+
+    async def scenario():
+        server = BridgeServer(scanner, port=0, web_root=web_root, batch_interval=0.01)
+        await server.start()
+        await server.start_scanner()
+        reader, writer = await http(server.port, path="/api/events", read_all=False)
+        # Never read: flood the stream until the socket buffers are full.
+        for _ in range(300):
+            for _ in range(20):
+                scanner.emit_canned()
+            await asyncio.sleep(0.005)
+        await asyncio.wait_for(server.close(), timeout=5)
+        writer.close()
+
+    asyncio.run(scenario())

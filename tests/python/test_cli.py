@@ -75,3 +75,21 @@ def test_run_server_demo_mode_opens_demo_url(monkeypatch, capsys):
     asyncio.run(scenario())
     assert opened and opened[0].endswith("/?demo")
     assert "iPad-finder kører nu" in capsys.readouterr().out
+
+
+def test_check_with_no_devices_is_not_reported_as_working(monkeypatch, capsys):
+    class SilentScanner:
+        def __init__(self, on_advert=None):
+            pass
+
+        async def start(self):
+            pass
+
+        async def stop(self):
+            pass
+
+    monkeypatch.setattr(cli, "BleScanner", SilentScanner)
+    assert cli.main(["--check", "--seconds", "0.05"]) == 3
+    out = capsys.readouterr().out
+    assert "Bluetooth virker" not in out
+    assert "ikke fundet nogen enheder" in out

@@ -23,7 +23,6 @@
       <span class="status-text" id="status-text">Starter …</span>
     </div>
     <div class="top-actions">
-      <button type="button" class="btn ghost small icon" id="pause-btn" aria-label="Sæt scanning på pause" hidden><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path class="icon-pause" d="M7 5h3v14H7zM14 5h3v14h-3z"/><path class="icon-play" d="M8 5l11 7-11 7z"/></svg></button>
       <button type="button" class="btn ghost small icon" id="help-btn" aria-haspopup="dialog" aria-label="Hjælp og tips">?</button>
     </div>
   </header>
@@ -31,6 +30,14 @@
   <div class="source-line" id="source-line" hidden></div>
 
   <main id="main">
+    <section class="card panel boot-fallback" id="boot-fallback" role="alert">
+      <h2>Siden kunne ikke starte</h2>
+      <p>
+        Åbn ikke HTML-filen direkte. Start i stedet programmet: dobbeltklik på <code>start-windows.bat</code> (Windows)
+        eller <code>start-mac.command</code> (Mac). Så åbner iPad-finder af sig selv i browseren.
+      </p>
+    </section>
+
     <section class="card tip" id="findmy-tip" aria-labelledby="findmy-title">
       <div class="tip-body">
         <h2 id="findmy-title">Første skridt: Prøv Apples Find-app</h2>
@@ -48,18 +55,24 @@
       <h2>Klar til at scanne</h2>
       <p>Tryk på knappen og giv browseren lov til at bruge Bluetooth.</p>
       <button type="button" class="btn primary big" id="start-btn">Start scanning</button>
-      <p class="muted small-text">Browser-scanning er en eksperimentel funktion i Chrome. Virker den ikke, så brug programmet på en computer (se hjælp).</p>
+      <p class="muted small-text">Browser-scanning er en eksperimentel funktion i Chrome. Virker den ikke, så <a href="#help-computer" data-open-help="help-computer">brug programmet på en computer</a>.</p>
     </section>
 
     <section class="card panel" id="unsupported-panel" hidden>
       <h2>Denne browser kan ikke scanne Bluetooth</h2>
       <p>Du har to muligheder:</p>
       <ol>
-        <li><strong>På en computer (anbefalet):</strong> Start iPad-finder-programmet (dobbeltklik på <code>start-windows.bat</code> eller <code>start-mac.command</code>). Så åbner siden af sig selv og bruger computerens Bluetooth.</li>
+        <li><strong>På en computer (anbefalet):</strong> Hent og start iPad-finder-programmet – <a href="#help-computer" data-open-help="help-computer">sådan gør du</a>. Så åbner siden af sig selv og bruger computerens Bluetooth.</li>
         <li><strong>På en Android-telefon:</strong> Åbn siden i Chrome, gå til <code>chrome://flags</code>, slå <em>Experimental Web Platform features</em> til, og genstart Chrome.</li>
       </ol>
       <p class="muted">iPhone og iPad kan ikke scanne Bluetooth fra en hjemmeside – brug Find-appen der.</p>
       <button type="button" class="btn" id="demo-btn">Prøv demo med simulerede enheder</button>
+    </section>
+
+    <section class="card panel" id="restart-panel" role="alert" hidden>
+      <h2>Scanningen er gået i stå</h2>
+      <p>Android sætter Bluetooth-scanning på pause efter cirka 10 minutter, eller når skærmen slukker.</p>
+      <button type="button" class="btn primary big" id="restart-btn">Fortsæt scanning</button>
     </section>
 
     <section class="card panel error" id="error-panel" role="alert" hidden>
@@ -157,7 +170,7 @@
 
   <dialog class="help" id="help-dialog" aria-labelledby="help-title">
     <form method="dialog" class="help-inner">
-      <h2 id="help-title">Sådan virker iPad-finder</h2>
+      <h2 id="help-title" tabindex="-1">Sådan virker iPad-finder</h2>
       <p>
         Alle iPads, iPhones og mange andre enheder sender hele tiden små Bluetooth-signaler.
         iPad-finder lytter efter dem og viser, hvor stærkt hvert signal er. Jo stærkere signal, jo tættere er du på.
@@ -171,12 +184,20 @@
       </ol>
       <h3>Godt at vide</h3>
       <ul>
-        <li>iPad'en skal have strøm og Bluetooth slået til. Er batteriet fladt, eller er den i flytilstand, sender den ikke.</li>
+        <li>iPad'en skal have strøm og Bluetooth slået til. Er batteriet fladt, eller er Bluetooth slukket, sender den ikke. (Flytilstand alene slukker normalt ikke Bluetooth.)</li>
         <li>Afstanden er kun et skøn. Vægge, møbler og mennesker gør signalet svagere.</li>
         <li>Apple-enheder skifter Bluetooth-adresse cirka hvert kvarter. Så kan enheden "forsvinde" og dukke op som en ny – iPad-finder prøver selv at finde den igen.</li>
         <li>Det er ikke altid muligt at se forskel på en iPad og en iPhone ud fra signalet alene. Brug <strong>Identificér</strong> eller udelukkelsesmetoden.</li>
         <li>Alt foregår lokalt på din enhed. Intet sendes til internettet.</li>
       </ul>
+      <h3 id="help-computer" tabindex="-1">Brug programmet på en computer</h3>
+      <ol>
+        <li>Hent programmet fra GitHub: <strong>Code → Download ZIP</strong>, og pak ZIP-filen ud.</li>
+        <li><strong>Windows:</strong> Installer Python fra <a href="https://www.python.org/downloads/" target="_blank" rel="noopener noreferrer">python.org</a> (hvis du ikke har det), og dobbeltklik på <code>start-windows.bat</code>.</li>
+        <li><strong>Mac:</strong> Højreklik på <code>start-mac.command</code> og vælg <strong>Åbn</strong>. Giv Terminal lov til at bruge Bluetooth.</li>
+        <li><strong>Linux:</strong> Kør <code>./start-linux.sh</code>.</li>
+      </ol>
+      <p>Mere hjælp står i filen <code>README.md</code>, der følger med programmet.</p>
       <div class="help-actions">
         <button class="btn primary" value="close">Luk</button>
       </div>

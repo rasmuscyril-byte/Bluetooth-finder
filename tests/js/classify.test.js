@@ -94,17 +94,20 @@ test("company ids and service uuids", () => {
   assert.equal(unknown.icon, "❔");
 });
 
-test("Microsoft CDP beacon reveals iPads running Microsoft apps", async () => {
+test("Microsoft beacons: CDP device types and Swift Pair", async () => {
   const { parseMicrosoftBeacon } = await import("../../web/js/engine/vendors.js");
-  const ipad = classify({ companyIds: [0x0006], microsoft: parseMicrosoftBeacon(hexToBytes("0107200255aa66bb")) });
-  assert.equal(ipad.kind, "ipad");
-  assert.equal(ipad.vendor, "Apple");
-  assert.equal(ipad.candidate, true);
-  assert.ok(ipad.details.includes("Fundet via Microsoft-app"));
-  assert.equal(classify({ companyIds: [0x0006], microsoft: parseMicrosoftBeacon(hexToBytes("0109")) }).label, "Windows-pc");
+  const pc = classify({ companyIds: [0x0006], microsoft: parseMicrosoftBeacon(hexToBytes("0109200255aa66bb")) });
+  assert.equal(pc.label, "Windows-pc");
+  assert.equal(pc.candidate, false);
+  // Version bits (top two) are ignored.
+  assert.equal(parseMicrosoftBeacon(hexToBytes("0149")).deviceType, 9);
+  // iPadOS apps cannot send manufacturer data, so type 7 is not trusted as an iPad.
+  const seven = classify({ companyIds: [0x0006], microsoft: parseMicrosoftBeacon(hexToBytes("0107")) });
+  assert.notEqual(seven.kind, "ipad");
+  assert.equal(classify({ companyIds: [0x0006], microsoft: parseMicrosoftBeacon(hexToBytes("0108")) }).kind, "android");
   assert.equal(classify({ companyIds: [0x0006], microsoft: parseMicrosoftBeacon(hexToBytes("0300803132")) }).kind, "accessory");
   assert.equal(parseMicrosoftBeacon(hexToBytes("")), null);
-  assert.equal(parseMicrosoftBeacon(hexToBytes("0199")).device, null);
+  assert.equal(parseMicrosoftBeacon(hexToBytes("0139")).device, null);
 });
 
 test("phone-ish service UUIDs", () => {
@@ -116,4 +119,19 @@ test("phone-ish service UUIDs", () => {
   assert.equal(classify({ companyIds: [], serviceUuids16: [0xfe07] }).kind, "headphones");
   assert.equal(classify({ companyIds: [], serviceUuids16: [0xfe00] }).kind, "accessory");
   assert.equal(classify({ companyIds: [0x018e] }).kind, "wearable");
+});
+
+test("specific product names win over brand names; iPad accessories are not iPads", () => {
+  const kind = (name) => classify({ name, companyIds: [] }).kind;
+  assert.equal(kind("Galaxy Book3 Pro"), "computer");
+  assert.equal(kind("Galaxy Fit3 (A1B2)"), "wearable");
+  assert.equal(kind("Galaxy Ring"), "wearable");
+  assert.equal(kind("OPPO Enco Air3"), "headphones");
+  assert.equal(kind("vivoactive 5"), "wearable");
+  assert.equal(kind("Pixel Tablet"), "tablet");
+  assert.equal(kind("Pixel 8"), "phone");
+  assert.equal(kind("Keyboard for iPad"), "accessory");
+  assert.equal(kind("iPad Pro Keyboard"), "accessory");
+  assert.equal(classify({ name: "Keyboard for iPad", companyIds: [] }).candidate, false);
+  assert.equal(kind("Rasmus’ iPad"), "ipad");
 });

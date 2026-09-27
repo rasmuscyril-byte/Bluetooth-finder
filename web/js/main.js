@@ -18,7 +18,6 @@ const NO_DEVICES_HELP_MS = 15000;
 const STATUS_TEXT = {
   starting: "Starter …",
   scanning: "Scanner …",
-  paused: "På pause",
   identifying: "Identificerer – scanning holder pause",
   error: "Fejl",
   unsupported: "Kan ikke scanne",
@@ -36,7 +35,6 @@ const state = {
   sourceStatus: { state: "idle", message: null },
   filter: "candidates",
   showHidden: false,
-  paused: false,
   followId: null,
   identify: new Map(),
   startedAt: Date.now(),
@@ -54,9 +52,17 @@ const list = createDeviceList($("#device-list"), {
   onFollow: startFollowing,
   onIdentify: identify,
   onHide: (id) => {
+    const label = tracker.get(id)?.classification?.label || "Enheden";
     tracker.hide(id);
     saveHidden();
-    showToast("Skjult. Du kan finde den igen under “Vis skjulte”.");
+    showToast(`${label} er skjult.`, {
+      action: "Fortryd",
+      onAction: () => {
+        tracker.unhide(id);
+        saveHidden();
+        markDirty(true);
+      },
+    });
     markDirty(true);
   },
   onUnhide: (id) => {
@@ -77,11 +83,18 @@ const follow = createFollowView($("#follow"), {
   },
 });
 
-tracker.on("reacquired", ({ fromId, toId }) => {
+tracker.on("reacquired", ({ fromId, toId, strong }) => {
   const previous = state.identify.get(fromId);
-  if (previous && !state.identify.has(toId)) state.identify.set(toId, previous);
-  if (state.followId === fromId) state.followId = toId;
-  showToast("Fandt den igen – den har skiftet Bluetooth-adresse.");
+  if (strong && previous?.state === "ok" && !state.identify.has(toId)) state.identify.set(toId, previous);
+  if (state.followId === fromId) {
+    state.followId = toId;
+    state.source?.setFollowed?.(toId);
+  }
+  showToast(
+    strong
+      ? "Fandt den igen – den har skiftet Bluetooth-adresse."
+      : "Følger nu en enhed, der ligner den (den skiftede sandsynligvis Bluetooth-adresse).",
+  );
   markDirty(true);
 });
 
@@ -97,9 +110,22 @@ function markDirty(forceSort = false) {
 }
 
 let toastTimer = null;
-function showToast(text, ms = 3500) {
+function showToast(text, { ms = 4000, action = null, onAction = null } = {}) {
   const toast = $("#toast");
-  toast.textContent = text;
+  toast.textContent = "";
+  toast.append(document.createTextNode(text));
+  if (action && onAction) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn small toast-action";
+    button.textContent = action;
+    button.addEventListener("click", () => {
+      onAction();
+      toast.hidden = true;
+    });
+    toast.append(" ", button);
+    ms = Math.max(ms, 7000);
+  }
   toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
@@ -114,7 +140,7 @@ function setStatus(status) {
 
 function renderStatus() {
   const { state: sourceState, message } = state.sourceStatus;
-  const shown = state.paused && sourceState === "scanning" ? "paused" : sourceState;
+  const shown = sourceState;
   const statusEl = $("#status");
   statusEl.dataset.state = shown;
   setText($("#status-text"), shown === "error" && message ? message : STATUS_TEXT[shown] || shown);
@@ -127,11 +153,6 @@ function renderStatus() {
     setText($("#error-text"), message);
     setText($("#error-hint"), errorHint(message));
   }
-  const pauseButton = $("#pause-btn");
-  pauseButton.hidden = !state.source || sourceState === "unsupported";
-  pauseButton.dataset.paused = String(state.paused);
-  pauseButton.setAttribute("aria-label", state.paused ? "Fortsæt scanning" : "Sæt scanning på pause");
-  pauseButton.title = pauseButton.getAttribute("aria-label");
 }
 
 function errorHint(message) {
@@ -166,7 +187,6 @@ async function useSource(source, { autoStart = true } = {}) {
 }
 
 function onAdverts(adverts) {
-  if (state.paused) return;
   tracker.ingestMany(adverts);
   markDirty();
 }
@@ -200,6 +220,7 @@ async function chooseSource() {
       $("#start-panel").hidden = true;
       await useSource(createWebBluetoothSource(makeSourceOptions()));
       if (state.sourceStatus.state !== "scanning") $("#start-panel").hidden = false;
+      else requestWakeLock(); // Android stops unfiltered scans when the screen turns off
     });
     return;
   }
@@ -228,9 +249,13 @@ async function identify(id) {
 
 // ------------------------------------------------------------------ follow
 
+function wantsWakeLock() {
+  return Boolean(state.followId) || state.source?.kind === "webbluetooth";
+}
+
 async function requestWakeLock() {
   try {
-    if ("wakeLock" in navigator && !wakeLock && document.visibilityState === "visible") {
+    if ("wakeLock" in navigator && !wakeLock && document.visibilityState === "visible" && wantsWakeLock()) {
       wakeLock = await navigator.wakeLock.request("screen");
       wakeLock.addEventListener?.("release", () => {
         wakeLock = null;
@@ -269,12 +294,12 @@ function stopFollowing() {
   beeper.setRssi(null);
   follow.setSound(false);
   follow.close();
-  releaseWakeLock();
+  if (!wantsWakeLock()) releaseWakeLock();
   markDirty(true);
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && state.followId) requestWakeLock();
+  if (document.visibilityState === "visible") requestWakeLock();
 });
 
 // ------------------------------------------------------------------ rendering
@@ -301,8 +326,7 @@ function renderList(now) {
   if (!empty.hidden) {
     const any = counts.all + counts.hidden > 0;
     let text = "Leder efter Bluetooth-enheder i nærheden …";
-    if (state.paused) text = "Scanningen er sat på pause.";
-    else if (!scanning) text = "Venter på Bluetooth …";
+    if (!scanning) text = "Venter på Bluetooth …";
     else if (any && state.filter === "candidates") text = "Ingen mulige iPads eller telefoner endnu. Prøv fanen “Alle”, eller gå lidt rundt.";
     else if (any) text = "Ingen enheder i denne visning endnu.";
     setText($("#empty-text"), text);
@@ -371,8 +395,11 @@ function frame(time) {
 }
 
 setInterval(() => {
-  tracker.tick();
+  const { removed } = tracker.tick();
+  for (const id of removed) state.identify.delete(id);
   markDirty();
+  const source = state.source;
+  $("#restart-panel").hidden = !(source?.kind === "webbluetooth" && source.needsRestart?.());
   if (document.hidden && state.followId) renderFollow(); // keep the beeper in sync in background tabs
 }, 1000);
 
@@ -381,7 +408,9 @@ setInterval(() => {
 function setFilter(filter) {
   state.filter = filter;
   for (const button of $$(".segmented [data-filter]")) {
-    button.setAttribute("aria-checked", String(button.dataset.filter === filter));
+    const checked = button.dataset.filter === filter;
+    button.setAttribute("aria-checked", String(checked));
+    button.tabIndex = checked ? 0 : -1;
   }
   markDirty(true);
 }
@@ -391,33 +420,57 @@ for (const button of $$(".segmented [data-filter]")) {
 }
 
 $(".segmented").addEventListener("keydown", (event) => {
-  if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
   const buttons = $$(".segmented [data-filter]");
-  const index = buttons.findIndex((button) => button.dataset.filter === state.filter);
-  const next = buttons[(index + (event.key === "ArrowRight" ? 1 : buttons.length - 1)) % buttons.length];
+  const index = Math.max(0, buttons.indexOf(event.target.closest("[data-filter]")));
+  const moves = { ArrowRight: index + 1, ArrowDown: index + 1, ArrowLeft: index - 1, ArrowUp: index - 1, Home: 0, End: buttons.length - 1 };
+  if (!(event.key in moves)) return;
+  const next = buttons[(moves[event.key] + buttons.length) % buttons.length];
   setFilter(next.dataset.filter);
   next.focus();
   event.preventDefault();
 });
+setFilter(state.filter);
 
 $("#show-hidden").addEventListener("change", (event) => {
   state.showHidden = event.target.checked;
   markDirty(true);
 });
 
-$("#pause-btn").addEventListener("click", () => {
-  state.paused = !state.paused;
-  renderStatus();
-  markDirty();
-});
-
-$("#help-btn").addEventListener("click", () => {
+function openHelp(sectionId = null) {
   const dialog = $("#help-dialog");
-  if (typeof dialog.showModal === "function") dialog.showModal();
-  else dialog.setAttribute("open", "");
-});
+  if (typeof dialog.showModal === "function") {
+    if (!dialog.open) dialog.showModal();
+  } else {
+    dialog.setAttribute("open", "");
+  }
+  const target = (sectionId && document.getElementById(sectionId)) || $("#help-title");
+  target.focus();
+  if (!sectionId) dialog.scrollTop = 0;
+  else target.scrollIntoView({ block: "start" });
+}
+
+$("#help-btn").addEventListener("click", () => openHelp());
+for (const link of $$("[data-open-help]")) {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    openHelp(link.dataset.openHelp);
+  });
+}
 
 $("#demo-btn").addEventListener("click", () => startDemo());
+
+$("#restart-btn").addEventListener("click", async () => {
+  const source = state.source;
+  if (!source) return;
+  $("#restart-panel").hidden = true;
+  source.stop();
+  try {
+    await source.start(); // keeps the devices found so far
+  } catch {
+    /* reported through onStatus */
+  }
+  requestWakeLock();
+});
 
 if (storage.get(TIP_KEY, false)) $("#findmy-tip").hidden = true;
 $("#tip-dismiss").addEventListener("click", () => {
@@ -427,6 +480,7 @@ $("#tip-dismiss").addEventListener("click", () => {
 
 // ------------------------------------------------------------------ go
 
+$("#boot-fallback")?.remove();
 renderStatus();
 requestAnimationFrame(frame);
 chooseSource();

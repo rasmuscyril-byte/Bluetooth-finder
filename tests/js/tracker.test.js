@@ -120,7 +120,7 @@ test("re-acquire after address rotation via the lingering auth tag", () => {
   }
   now = 20000;
   const { reacquired } = tracker.tick();
-  assert.deepEqual(reacquired, { fromId: "old-addr", toId: "new-addr" });
+  assert.deepEqual(reacquired, { fromId: "old-addr", toId: "new-addr", strong: true });
   assert.deepEqual(events, [reacquired]);
   assert.equal(tracker.followedId, "new-addr");
   const next = tracker.get("new-addr");
@@ -136,7 +136,7 @@ test("soft re-acquire only when exactly one device matches", () => {
   tracker.follow("old");
   for (let t = 6000; t <= 16000; t += 500) tracker.ingest(advert("new", -72, t, IPAD("bbbbbb")));
   now = 16000;
-  assert.deepEqual(tracker.tick().reacquired, { fromId: "old", toId: "new" });
+  assert.deepEqual(tracker.tick().reacquired, { fromId: "old", toId: "new", strong: false });
 
   // Two lookalikes → ambiguous → keep waiting.
   const ambiguous = new Tracker({ now: () => now });
@@ -190,8 +190,56 @@ test("event listeners can unsubscribe and errors in listeners are contained", ()
 
 test("Microsoft CDP data is parsed by the tracker", () => {
   const tracker = new Tracker();
-  const device = tracker.ingest(advert("ms", -60, 0, { 6: "0107200255aa66bb77cc88dd99ee00ff" }));
-  assert.equal(device.microsoft.deviceType, 7);
-  assert.equal(device.classification.kind, "ipad");
-  assert.deepEqual(tracker.list().map((d) => d.id), ["ms"]);
+  const device = tracker.ingest(advert("ms", -60, 0, { 6: "0109200255aa66bb77cc88dd99ee00ff" }));
+  assert.equal(device.microsoft.deviceType, 9);
+  assert.equal(device.classification.label, "Windows-pc");
+  assert.deepEqual(tracker.list({ filter: "all" }).map((d) => d.id), ["ms"]);
+  assert.deepEqual(tracker.list().map((d) => d.id), []);
+});
+
+test("soft re-acquire never hands the iPad's identity to another device", () => {
+  let now = 0;
+  const tracker = new Tracker({ now: () => now });
+  for (let t = 0; t <= 5000; t += 500) tracker.ingest(advert("ipad", -70, t, IPAD("aaaaaa")));
+  tracker.setIdentity("ipad", { model: "iPad13,1" });
+  tracker.follow("ipad");
+  for (let t = 6000; t <= 16000; t += 500) tracker.ingest(advert("new", -72, t, IPAD("bbbbbb")));
+  now = 16000;
+  assert.equal(tracker.tick().reacquired.strong, false);
+  const next = tracker.get("new");
+  assert.equal(next.identity, null);
+  assert.notEqual(next.classification.confidence, "sikker");
+});
+
+test("devices appearing long after the loss are not taken for the lost one", () => {
+  let now = 0;
+  const tracker = new Tracker({ now: () => now });
+  for (let t = 0; t <= 20000; t += 500) tracker.ingest(advert("ipad", -70, t, IPAD("aaaaaa")));
+  tracker.follow("ipad");
+  // The user's phone rotates its address three minutes later: same soft fingerprint.
+  for (let t = 200000; t <= 210000; t += 500) tracker.ingest(advert("phone-rotated", -72, t, IPAD("cccccc")));
+  now = 210000;
+  assert.equal(tracker.tick().reacquired, null);
+  assert.equal(tracker.followedId, "ipad");
+});
+
+test("a device known to be a different kind is never re-acquired", () => {
+  let now = 0;
+  const tracker = new Tracker({ now: () => now });
+  for (let t = 0; t <= 5000; t += 500) tracker.ingest(advert("ipad", -70, t, IPAD("aaaaaa")));
+  tracker.setIdentity("ipad", { model: "iPad13,1" });
+  tracker.follow("ipad");
+  // Announces itself as an iPhone (Hey Siri) but shares the lingering auth tag by coincidence.
+  tracker.ingest(advert("iphone", -71, 6000, { 76: "0807aabb1020000201" + "10051318aaaaaa" }));
+  for (let t = 6500; t <= 16000; t += 500) tracker.ingest(advert("iphone", -71, t, IPAD("aaaaaa")));
+  now = 16000;
+  assert.equal(tracker.tick().reacquired, null);
+});
+
+test("service data UUIDs count for classification", () => {
+  const tracker = new Tracker();
+  const device = tracker.ingest(advert("s", -70, 0, {}, { serviceData: { "0000fd69-0000-1000-8000-00805f9b34fb": "0102030405" } }));
+  assert.equal(device.classification.kind, "samsung-offline");
+  assert.equal(device.classification.candidate, true);
+  assert.deepEqual(device.serviceUuids, ["0000fd69-0000-1000-8000-00805f9b34fb"]);
 });

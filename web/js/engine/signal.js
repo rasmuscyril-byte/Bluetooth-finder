@@ -43,13 +43,6 @@ export class RssiFilter {
   }
 }
 
-/** Rough distance in meters from the log-distance path loss model. Only a guess! */
-export function estimateDistance(rssi, { measuredPower = -59, n = 2.5 } = {}) {
-  if (!Number.isFinite(rssi)) return null;
-  const meters = Math.pow(10, (measuredPower - rssi) / (10 * n));
-  return Math.max(0.1, Math.round(meters * 10) / 10);
-}
-
 const LEVELS = [
   { min: -50, level: 5, key: "burning", label: "Brændende varm!", hint: "Under 1 meter – kig lige her" },
   { min: -60, level: 4, key: "hot", label: "Meget varm", hint: "Ca. 1–2 meter" },

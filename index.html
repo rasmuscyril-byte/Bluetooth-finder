@@ -4,9 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>iPad-finder</title>
-  <meta http-equiv="refresh" content="0; url=web/">
+  <script>
+    // On a web server (e.g. GitHub Pages) go straight to the app. Opened from
+    // disk, the app cannot run – explain how to start it instead.
+    if (location.protocol !== "file:") location.replace("web/");
+  </script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40em; margin: 2em auto; padding: 0 16px; line-height: 1.5; }
+  </style>
 </head>
 <body>
-  <p><a href="web/">Åbn iPad-finder</a></p>
+  <h1>📍 iPad-finder</h1>
+  <p>Denne fil kan ikke åbnes direkte. Start i stedet programmet:</p>
+  <ul>
+    <li><strong>Windows:</strong> dobbeltklik på <code>start-windows.bat</code></li>
+    <li><strong>Mac:</strong> højreklik på <code>start-mac.command</code> og vælg <strong>Åbn</strong></li>
+    <li><strong>Linux:</strong> kør <code>./start-linux.sh</code></li>
+  </ul>
+  <p>Så åbner iPad-finder af sig selv i din browser. Se <code>README.md</code> for mere hjælp.</p>
+  <p><a href="web/">Åbn web-appen</a> (kun når siden ligger på en webserver).</p>
 </body>
 </html>

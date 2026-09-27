@@ -9,7 +9,8 @@ permissions:
 
 jobs:
   python:
-    runs-on: ubuntu-latest
+    # Pinned: Python 3.9 builds are not published for newer Ubuntu images.
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ["3.9", "3.12"]
@@ -31,4 +32,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-      - run: node --test tests/js/*.test.js
+      - run: node --test

@@ -99,6 +99,10 @@ async def run_check(seconds: float) -> int:
     finally:
         await scanner.stop()
 
+    if not seen:
+        _say("Scanningen startede, men der blev ikke fundet nogen enheder – heller ikke din egen telefon.")
+        _say("Er Bluetooth slået til, og understøtter computeren Bluetooth Low Energy (Bluetooth 4.0 eller nyere)?")
+        return 3
     apple = [a for a in seen.values() if APPLE_COMPANY_ID in a.get("manufacturerData", {})]
     _say(f"Bluetooth virker! Fandt {len(seen)} enheder, heraf {len(apple)} Apple-enheder.")
     strongest = sorted(seen.values(), key=lambda a: a.get("rssi") or -999, reverse=True)[:15]

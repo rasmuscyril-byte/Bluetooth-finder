@@ -23,13 +23,16 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
-if [ ! -x ".venv/bin/python" ]; then
+# (Re)create the environment unless it has a working pip, so an interrupted
+# first run does not leave a broken .venv behind.
+if ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
   echo "  Gør klar første gang (det tager et minuts tid) ..."
-  "$PY" -m venv .venv || { read -r -p "  Kunne ikke oprette .venv. Tryk Enter for at lukke ..."; exit 1; }
+  "$PY" -m venv --clear .venv || { read -r -p "  Kunne ikke oprette .venv. Tryk Enter for at lukke ..."; exit 1; }
 fi
 
 if ! .venv/bin/python -m pip install --disable-pip-version-check -q -r requirements.txt; then
-  echo "  Installationen af Bluetooth-biblioteket (bleak) fejlede. Er du på internettet?"
+  echo "  Installationen af Bluetooth-biblioteket (bleak) fejlede – se fejlbeskeden ovenfor."
+  echo "  Første start kræver internet."
   read -r -p "  Tryk Enter for at lukke ..."
   exit 1
 fi

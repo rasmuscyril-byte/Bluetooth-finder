@@ -22,6 +22,12 @@ export function createDeviceList(root, { onFollow, onIdentify, onHide, onUnhide 
   const entries = new Map();
   let order = [];
   let lastSort = -Infinity;
+  // Don't shuffle cards while someone is about to tap or has keyboard focus in the list.
+  let pointerInside = false;
+  root.addEventListener("pointerenter", () => (pointerInside = true));
+  root.addEventListener("pointerleave", () => (pointerInside = false));
+  root.addEventListener("pointerdown", () => (pointerInside = true));
+  const userIsHere = () => pointerInside || root.contains(document.activeElement);
 
   root.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
@@ -112,14 +118,19 @@ export function createDeviceList(root, { onFollow, onIdentify, onHide, onUnhide 
     refs.result.dataset.state = identifyState?.state || "";
     setText(refs.result, text);
 
-    refs.follow.setAttribute("aria-label", `Find ${c.label || "enheden"} (${shortId(device.id)})`);
+    refs.follow.setAttribute("aria-label", `Find den – ${c.label || "ukendt enhed"} (${shortId(device.id)})`);
   }
 
   function render(devices, ctx) {
     const ids = devices.map((device) => device.id);
     const orderSet = new Set(order);
     const membershipChanged = ids.length !== order.length || ids.some((id) => !orderSet.has(id));
-    if (membershipChanged || ctx.now - lastSort >= RESORT_MS || ctx.forceSort) {
+    const due = ctx.now - lastSort >= RESORT_MS || ctx.forceSort;
+    if (membershipChanged && userIsHere()) {
+      // Keep existing cards where they are; new ones go to the end.
+      const idSet = new Set(ids);
+      order = [...order.filter((id) => idSet.has(id)), ...ids.filter((id) => !orderSet.has(id))];
+    } else if (membershipChanged || (due && !userIsHere())) {
       order = ids;
       lastSort = ctx.now;
     }
@@ -132,6 +143,7 @@ export function createDeviceList(root, { onFollow, onIdentify, onHide, onUnhide 
       }
     }
 
+    const focused = root.contains(document.activeElement) ? document.activeElement : null;
     order.forEach((id, index) => {
       const device = byId.get(id);
       if (!device) return;
@@ -143,6 +155,8 @@ export function createDeviceList(root, { onFollow, onIdentify, onHide, onUnhide 
       update(entry, device, ctx);
       if (root.children[index] !== entry.el) root.insertBefore(entry.el, root.children[index] || null);
     });
+    // Moving a node drops its focus; put it back.
+    if (focused && document.activeElement !== focused && root.contains(focused)) focused.focus({ preventScroll: true });
   }
 
   return { render };
