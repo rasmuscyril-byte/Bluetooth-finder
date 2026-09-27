@@ -5,6 +5,7 @@ import { proximity, signalBars } from "../engine/signal.js";
 import { formatAgo, formatDbm, h, setText, shortId } from "./dom.js";
 
 const RESORT_MS = 2000;
+const INTERACTION_GRACE_MS = 1500;
 
 export function identifyText(state) {
   if (!state) return "";
@@ -22,12 +23,16 @@ export function createDeviceList(root, { onFollow, onIdentify, onHide, onUnhide 
   const entries = new Map();
   let order = [];
   let lastSort = -Infinity;
-  // Don't shuffle cards while someone is about to tap or has keyboard focus in the list.
-  let pointerInside = false;
-  root.addEventListener("pointerenter", () => (pointerInside = true));
-  root.addEventListener("pointerleave", () => (pointerInside = false));
-  root.addEventListener("pointerdown", () => (pointerInside = true));
-  const userIsHere = () => pointerInside || root.contains(document.activeElement);
+  // Don't shuffle cards right while someone is moving towards a button or
+  // using the keyboard in the list; re-sort once they pause for a moment.
+  let lastInteraction = -Infinity;
+  let restoringFocus = false;
+  for (const type of ["pointerdown", "pointermove", "keydown", "focusin"]) {
+    root.addEventListener(type, () => {
+      if (!restoringFocus) lastInteraction = Date.now();
+    });
+  }
+  const userIsHere = () => Date.now() - lastInteraction < INTERACTION_GRACE_MS;
 
   root.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
@@ -126,11 +131,11 @@ export function createDeviceList(root, { onFollow, onIdentify, onHide, onUnhide 
     const orderSet = new Set(order);
     const membershipChanged = ids.length !== order.length || ids.some((id) => !orderSet.has(id));
     const due = ctx.now - lastSort >= RESORT_MS || ctx.forceSort;
-    if (membershipChanged && userIsHere()) {
+    if (membershipChanged && userIsHere() && !ctx.forceSort) {
       // Keep existing cards where they are; new ones go to the end.
       const idSet = new Set(ids);
       order = [...order.filter((id) => idSet.has(id)), ...ids.filter((id) => !orderSet.has(id))];
-    } else if (membershipChanged || (due && !userIsHere())) {
+    } else if (membershipChanged || ctx.forceSort || (due && !userIsHere())) {
       order = ids;
       lastSort = ctx.now;
     }
@@ -156,7 +161,11 @@ export function createDeviceList(root, { onFollow, onIdentify, onHide, onUnhide 
       if (root.children[index] !== entry.el) root.insertBefore(entry.el, root.children[index] || null);
     });
     // Moving a node drops its focus; put it back.
-    if (focused && document.activeElement !== focused && root.contains(focused)) focused.focus({ preventScroll: true });
+    if (focused && document.activeElement !== focused && root.contains(focused)) {
+      restoringFocus = true;
+      focused.focus({ preventScroll: true });
+      restoringFocus = false;
+    }
   }
 
   return { render };

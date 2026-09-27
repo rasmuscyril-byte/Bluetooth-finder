@@ -8,6 +8,7 @@
   <title>iPad-finder</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/app.css">
+  <script src="js/boot.js" defer></script>
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
@@ -30,7 +31,7 @@
   <div class="source-line" id="source-line" hidden></div>
 
   <main id="main">
-    <section class="card panel boot-fallback" id="boot-fallback" role="alert">
+    <section class="card panel" id="boot-fallback" role="alert" hidden>
       <h2>Siden kunne ikke starte</h2>
       <p>
         Åbn ikke HTML-filen direkte. Start i stedet programmet: dobbeltklik på <code>start-windows.bat</code> (Windows)
@@ -145,6 +146,10 @@
       <p class="spark-caption muted">Signalstyrke det seneste minut – højere er tættere på.</p>
 
       <div class="warning" id="follow-warning" role="status" hidden></div>
+      <div class="warning" id="follow-restart" role="alert" hidden>
+        <p>Scanningen er gået i stå (Android sætter den på pause efter et stykke tid, eller når skærmen slukker).</p>
+        <button type="button" class="btn primary" id="follow-restart-btn">Fortsæt scanning</button>
+      </div>
 
       <div class="follow-actions">
         <button type="button" class="btn big" id="sound-btn" aria-pressed="false">🔈 Slå lyd til</button>

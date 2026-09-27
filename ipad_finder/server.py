@@ -332,7 +332,10 @@ class BridgeServer:
                     body = await asyncio.wait_for(reader.readexactly(length), timeout=10.0)
                 except (asyncio.IncompleteReadError, asyncio.TimeoutError):
                     raise RequestError(400)
-        path = unquote(urlsplit(target).path or "/")
+        try:
+            path = unquote(urlsplit(target).path or "/")
+        except ValueError:  # e.g. "http://[::1/"
+            raise RequestError(400)
         return Request(method.upper(), path, headers, body)
 
     def _host_allowed(self, host_header: Optional[str]) -> bool:
@@ -349,16 +352,16 @@ class BridgeServer:
     def _origin_allowed(self, origin: Optional[str]) -> bool:
         if origin is None:
             return True
-        parsed = urlsplit(origin)
-        if parsed.scheme != "http" or not parsed.hostname:
+        try:
+            parsed = urlsplit(origin)
+            hostname = (parsed.hostname or "").lower()
+            port = parsed.port
+        except ValueError:  # e.g. "http://[::1" or "http://127.0.0.1:99999"
             return False
-        hostname = parsed.hostname.lower()
+        if parsed.scheme != "http" or not hostname:
+            return False
         if ":" in hostname:
             hostname = f"[{hostname}]"
-        try:
-            port = parsed.port
-        except ValueError:  # e.g. "http://127.0.0.1:99999"
-            return False
         return hostname in self.allowed_hosts and port == self.port
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

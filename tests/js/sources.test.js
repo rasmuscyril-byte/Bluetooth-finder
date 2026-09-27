@@ -174,6 +174,8 @@ test("Web Bluetooth source asks for a restart when Android pauses the scan", asy
   for (const fn of nav.listeners) fn({ device: { id: "d1" }, rssi: -50 });
   assert.equal(source.needsRestart(Date.now() + 5000), false, "adverts are flowing");
   assert.equal(source.needsRestart(now + 10 * 60 * 1000), true, "Android's ~10 minute limit");
+  nav.scan.active = false; // Chrome stopped it (screen off / app switch)
+  assert.equal(source.needsRestart(Date.now()), true, "a scan Chrome stopped needs a restart");
   source.stop();
-  assert.equal(source.needsRestart(), false);
+  assert.equal(source.needsRestart(), false, "a scan we stopped ourselves does not");
 });

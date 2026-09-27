@@ -385,3 +385,39 @@ def test_restart_recreates_the_bleak_scanner(fake_bleak):
         assert FakeBleakScanner.instances[0].stopped == 1
 
     asyncio.run(scenario())
+
+
+def test_name_fallback_errors_do_not_lose_the_model(fake_bleak):
+    FakeBleakClient.reads = {scanner_module.MODEL_NUMBER_CHAR: b"iPad13,1"}
+
+    def broken_name(self):
+        raise Exception("Not connected")
+
+    FakeBleakClient.name = property(broken_name)
+
+    async def scenario():
+        scanner = BleScanner()
+        await scanner.start()
+        return await scanner.identify(seen_device(scanner))
+
+    try:
+        result = asyncio.run(scenario())
+    finally:
+        del FakeBleakClient.name
+    assert result["ok"] is True and result["model"] == "iPad13,1" and result["name"] is None
+
+
+def test_restart_waits_for_identify(fake_bleak):
+    FakeBleakClient.behaviour = "hang"
+
+    async def scenario():
+        scanner = BleScanner(identify_timeout=0.3)
+        await scanner.start()
+        task = asyncio.ensure_future(scanner.identify(seen_device(scanner)))
+        await asyncio.sleep(0.05)
+        assert scanner.busy
+        await scanner.restart()  # must not start a scan in the middle of the connection
+        assert len(FakeBleakScanner.instances) == 1
+        assert (await task)["error"]["code"] == "timeout"
+
+    asyncio.run(scenario())

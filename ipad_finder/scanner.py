@@ -128,7 +128,7 @@ class BleScanner:
 
     @property
     def busy(self) -> bool:
-        """True while an identify is running (scanning is paused on purpose)."""
+        """True while an identify or restart is running (scanning is paused on purpose)."""
         return self.identifying or (self._lock is not None and self._lock.locked())
 
     async def start(self) -> None:
@@ -168,13 +168,21 @@ class BleScanner:
         self.scanning = False
 
     async def restart(self) -> None:
-        """Stop and start again, e.g. when the scan died silently (Bluetooth toggled, sleep)."""
-        await self.stop()
-        self._scanner = None  # a fresh bleak scanner picks up a re-plugged/re-enabled adapter
-        try:
-            await self.start()
-        except BluetoothUnavailable as exc:
-            log.warning("Bluetooth: %s", exc.message)
+        """Stop and start again, e.g. when the scan died silently (Bluetooth toggled, sleep).
+
+        Shares the identify lock, so a restart never overlaps a GATT connection.
+        """
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        if self._lock.locked():
+            return
+        async with self._lock:
+            await self.stop()
+            self._scanner = None  # a fresh bleak scanner picks up a re-plugged/re-enabled adapter
+            try:
+                await self.start()
+            except BluetoothUnavailable as exc:
+                log.warning("Bluetooth: %s", exc.message)
 
     async def shutdown(self) -> None:
         """Stop for good: a running identify will not resume scanning afterwards."""
@@ -289,7 +297,10 @@ class BleScanner:
                 # macOS hides the GAP service but CoreBluetooth reports the name
                 # of a connected peripheral (bleak >= 1.1). Ignore address-like
                 # aliases such as BlueZ's "AA-BB-CC-DD-EE-FF".
-                name = getattr(client, "name", None)
+                try:
+                    name = client.name
+                except Exception:  # e.g. BleakError("Not connected") on Windows
+                    name = None
                 if isinstance(name, str) and name.strip() and not ADDRESS_LIKE.match(name.strip()):
                     info["name"] = name.strip()
         finally:

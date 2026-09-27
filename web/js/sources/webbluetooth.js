@@ -117,12 +117,14 @@ export function createWebBluetoothSource({ onAdverts, onStatus, batchMs = 250, n
     },
 
     /**
-     * Android moves long-running unfiltered scans to "opportunistic" mode after
-     * about 10 minutes (and stops them when the screen is off). A restart needs a
-     * user gesture, so the UI asks for one when this returns true.
+     * Chrome stops the scan when the page is hidden, and Android moves
+     * long-running unfiltered scans to "opportunistic" mode after about 10
+     * minutes. A restart needs a user gesture, so the UI asks for one when this
+     * returns true.
      */
     needsRestart(now = Date.now()) {
-      if (!scan?.active || startedAt === null) return false;
+      if (!scan || startedAt === null) return false; // not started, or stopped by us
+      if (!scan.active) return true; // Chrome stopped it (screen off, app switch)
       if (now - startedAt > 9 * 60 * 1000) return true;
       const quietSince = lastAdvertAt ?? startedAt;
       return now - quietSince > 20000;
@@ -135,6 +137,7 @@ export function createWebBluetoothSource({ onAdverts, onStatus, batchMs = 250, n
         /* ignore */
       }
       scan = null;
+      startedAt = null;
       cleanup();
     },
   };

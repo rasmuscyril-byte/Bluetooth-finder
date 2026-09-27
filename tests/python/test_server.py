@@ -361,6 +361,11 @@ def test_hostile_identify_bodies_get_clean_answers(web_root):
         assert status == 403
         status, _, _ = await identify_request(server.port, {"id": "x"}, origin="http://localhost:abc")
         assert status == 403
+        for origin in ("http://[::1", f"http://[example.com]:{server.port}"):
+            status, _, _ = await identify_request(server.port, {"id": "x"}, origin=origin)
+            assert status == 403
+        status, _, _ = await http(server.port, method="GET", path="http://[::1/")
+        assert status == 400
 
     run_with_server(scenario, web_root=web_root)
 

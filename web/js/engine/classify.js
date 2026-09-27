@@ -90,15 +90,16 @@ function fromName(name, isApple) {
   const n = String(name || "").toLowerCase();
   if (!n) return null;
   // "Keyboard for iPad", "iPad Pro Case" … are accessories, not the iPad.
-  const accessory = /keyboard|tastatur|case|cover|pencil|stylus|for ipad|til ipad|charger|oplader|magic/.test(n);
+  const accessory =
+    /\b(keyboard|tastatur|case|cover|pencil|stylus|charger|oplader)\b|\b(for|til) ipad\b|\bmagic (keyboard|mouse|trackpad)\b/.test(n);
   if (n.includes("ipad") && !accessory) return ["ipad", "iPad"];
   if (n.includes("iphone") && !accessory) return ["iphone", "iPhone"];
   if (/macbook|imac|mac mini|mac studio|mac pro/.test(n)) return ["mac", "Mac"];
   if (n.includes("airpods")) return ["airpods", "AirPods"];
   if (n.includes("apple watch") || (isApple && n.includes("watch"))) return ["apple-watch", "Apple Watch"];
-  if (accessory) return ["accessory", "Tilbehør"];
   // Specific product families first, brand names (galaxy, oppo …) last.
   if (/galaxy book|matebook|magicbook|chromebook|thinkpad|laptop|notebook/.test(n)) return ["computer", "Computer"];
+  if (accessory) return ["accessory", "Tilbehør"];
   if (/galaxy tab|\btab s\d|tablet|\bpad\b|mediapad|matepad/.test(n)) return ["tablet", "Tablet"];
   if (/buds|headphone|earbuds|\benco\b|freebuds|\bjbl\b|bose|\bwh-|\bwf-|beats|jabra|sennheiser/.test(n)) {
     return ["headphones", "Høretelefoner"];

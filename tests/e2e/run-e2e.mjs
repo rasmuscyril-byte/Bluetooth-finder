@@ -153,6 +153,20 @@ try {
     await page.locator('[data-filter="candidates"]').click();
     await page.waitForTimeout(500);
 
+    // A resting mouse must not freeze the "strongest first" order.
+    const firstCard = page.locator(".device").first();
+    const box = await firstCard.boundingBox();
+    await page.mouse.move(box.x + 20, box.y + 20);
+    await page.evaluate(() => {
+      const t = Date.now();
+      window.ipadFinder.tracker.ingestMany(
+        Array.from({ length: 12 }, (_, i) => ({ id: "ZZ:ZZ:ZZ:00:00:99", rssi: -30, name: "Galaxy S24", manufacturerData: {}, serviceData: {}, serviceUuids: [], t: t + i })),
+      );
+    });
+    await page.waitForTimeout(4500);
+    check((await page.locator(".device").first().getAttribute("data-id")) === "ZZ:ZZ:ZZ:00:00:99", "list re-sorts even while the mouse rests on it");
+    await page.mouse.move(0, 0);
+
     await ipadCard.locator('[data-action="follow"]').click();
     await page.waitForSelector("#follow:not([hidden])");
     await page.waitForTimeout(2500);
@@ -288,10 +302,17 @@ try {
     await page.addInitScript(() => {
       const target = new EventTarget();
       const view = (hex) => new DataView(new Uint8Array(hex.match(/../g).map((b) => parseInt(b, 16))).buffer);
+      window.__scanStarts = 0;
       target.requestLEScan = async (options) => {
         window.__scanOptions = options;
+        window.__scanStarts += 1;
+        const scan = { active: true, stop() { this.active = false; } };
+        window.__stopMockScan = () => {
+          scan.active = false;
+        };
         let i = 0;
         setInterval(() => {
+          if (!scan.active) return;
           i += 1;
           const event = new Event("advertisementreceived");
           Object.assign(event, {
@@ -305,7 +326,7 @@ try {
           });
           target.dispatchEvent(event);
         }, 100);
-        return { active: true, stop() { this.active = false; } };
+        return scan;
       };
       Object.defineProperty(navigator, "bluetooth", { value: target, configurable: true });
     });
@@ -317,6 +338,17 @@ try {
     check((await page.evaluate(() => window.__scanOptions?.acceptAllAdvertisements)) === true, "requestLEScan asked for all adverts");
     check((await page.locator(".device").count()) === 1, "the mocked device is listed");
     check((await page.locator('.device [data-action="identify"]').isHidden()), "identify is hidden without the computer program");
+    // Chrome stops the scan when the screen turns off: the follow view must offer a restart.
+    await page.locator('.device [data-action="follow"]').first().click();
+    await page.evaluate(() => {
+      window.__stopMockScan();
+    });
+    await page.waitForSelector("#follow-restart:not([hidden])", { timeout: 5000 });
+    check(true, "follow view offers 'Fortsæt scanning' when the scan was stopped");
+    await page.locator("#follow-restart-btn").click();
+    await page.waitForTimeout(1500);
+    check(await page.locator("#follow-restart").isHidden(), "'Fortsæt scanning' restarts the scan");
+    check((await page.evaluate(() => window.__scanStarts)) === 2, "requestLEScan was called again");
     const real = errors.filter((text) => !text.includes("404"));
     check(real.length === 0, `no console errors with Web Bluetooth (${real.join(" | ")})`);
     await page.close();

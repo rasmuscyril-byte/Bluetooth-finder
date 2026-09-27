@@ -136,6 +136,7 @@ function showToast(text, { ms = 4000, action = null, onAction = null } = {}) {
 function setStatus(status) {
   state.sourceStatus = status;
   renderStatus();
+  if (!wantsWakeLock()) releaseWakeLock();
 }
 
 function renderStatus() {
@@ -250,7 +251,9 @@ async function identify(id) {
 // ------------------------------------------------------------------ follow
 
 function wantsWakeLock() {
-  return Boolean(state.followId) || state.source?.kind === "webbluetooth";
+  // Android stops unfiltered scans when the screen turns off, so keep it on while scanning.
+  const scanningInBrowser = state.source?.kind === "webbluetooth" && ["scanning", "starting"].includes(state.sourceStatus.state);
+  return Boolean(state.followId) || scanningInBrowser;
 }
 
 async function requestWakeLock() {
@@ -377,6 +380,8 @@ function renderFollow() {
     identifyBusy,
   });
   beeper.setRssi(result && !result.lost ? device.smoothed : null);
+  // The list's restart prompt is hidden behind this view, so show it here too.
+  $("#follow-restart").hidden = !(state.source?.kind === "webbluetooth" && state.source.needsRestart?.());
 }
 
 let lastFollowRender = 0;
@@ -459,10 +464,11 @@ for (const link of $$("[data-open-help]")) {
 
 $("#demo-btn").addEventListener("click", () => startDemo());
 
-$("#restart-btn").addEventListener("click", async () => {
+async function restartScan() {
   const source = state.source;
   if (!source) return;
   $("#restart-panel").hidden = true;
+  $("#follow-restart").hidden = true;
   source.stop();
   try {
     await source.start(); // keeps the devices found so far
@@ -470,7 +476,10 @@ $("#restart-btn").addEventListener("click", async () => {
     /* reported through onStatus */
   }
   requestWakeLock();
-});
+}
+
+$("#restart-btn").addEventListener("click", restartScan);
+$("#follow-restart-btn").addEventListener("click", restartScan);
 
 if (storage.get(TIP_KEY, false)) $("#findmy-tip").hidden = true;
 $("#tip-dismiss").addEventListener("click", () => {
@@ -480,6 +489,7 @@ $("#tip-dismiss").addEventListener("click", () => {
 
 // ------------------------------------------------------------------ go
 
+window.__ipadFinderStarted = true;
 $("#boot-fallback")?.remove();
 renderStatus();
 requestAnimationFrame(frame);

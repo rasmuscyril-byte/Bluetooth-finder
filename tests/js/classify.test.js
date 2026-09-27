@@ -135,3 +135,14 @@ test("specific product names win over brand names; iPad accessories are not iPad
   assert.equal(classify({ name: "Keyboard for iPad", companyIds: [] }).candidate, false);
   assert.equal(kind("Rasmus’ iPad"), "ipad");
 });
+
+test("accessory words only match whole words", () => {
+  const kind = (name) => classify({ name, companyIds: [] }).kind;
+  assert.equal(kind("Casey's iPad"), "ipad");
+  assert.equal(kind("Caseys iPhone"), "iphone");
+  assert.equal(kind("HONOR Magic6 Pro"), "phone");
+  assert.equal(kind("HONOR MagicBook 14"), "computer");
+  assert.equal(kind("Magic Keyboard"), "accessory");
+  assert.equal(kind("iPad Case"), "accessory");
+  assert.equal(kind("Smart Keyboard til iPad"), "accessory");
+});
