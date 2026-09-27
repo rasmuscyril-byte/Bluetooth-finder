@@ -1,0 +1,16 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Node / tests
+node_modules/
+test-results/
+tests/e2e/screenshots/
+
+# OS
+.DS_Store
+Thumbs.db

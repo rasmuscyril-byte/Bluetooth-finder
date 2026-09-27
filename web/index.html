@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Find din mistede iPad eller telefon ved at følge dens Bluetooth-signal – varmere og koldere.">
+  <title>iPad-finder</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#device-list">Spring til enhedslisten</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">📍</span>
+      <h1>iPad-finder</h1>
+    </div>
+    <div class="status" id="status" data-state="starting">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="status-text" id="status-text">Starter …</span>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="btn ghost small icon" id="pause-btn" aria-label="Sæt scanning på pause" hidden><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path class="icon-pause" d="M7 5h3v14H7zM14 5h3v14h-3z"/><path class="icon-play" d="M8 5l11 7-11 7z"/></svg></button>
+      <button type="button" class="btn ghost small icon" id="help-btn" aria-haspopup="dialog" aria-label="Hjælp og tips">?</button>
+    </div>
+  </header>
+
+  <div class="source-line" id="source-line" hidden></div>
+
+  <main id="main">
+    <section class="card tip" id="findmy-tip" aria-labelledby="findmy-title">
+      <div class="tip-body">
+        <h2 id="findmy-title">Første skridt: Prøv Apples Find-app</h2>
+        <p>
+          Log ind på <a href="https://www.icloud.com/find" target="_blank" rel="noopener noreferrer">icloud.com/find</a>
+          (eller åbn <strong>Find</strong>-appen på en anden Apple-enhed), vælg din iPad og tryk
+          <strong>Afspil lyd</strong>. Den spiller lyd, selvom den står på lydløs.
+        </p>
+        <p class="muted">Virker det ikke, eller er den i nærheden men skjult? Så brug Bluetooth-søgningen herunder.</p>
+      </div>
+      <button type="button" class="btn ghost small" id="tip-dismiss" aria-label="Skjul tip">Skjul</button>
+    </section>
+
+    <section class="card panel" id="start-panel" hidden>
+      <h2>Klar til at scanne</h2>
+      <p>Tryk på knappen og giv browseren lov til at bruge Bluetooth.</p>
+      <button type="button" class="btn primary big" id="start-btn">Start scanning</button>
+      <p class="muted small-text">Browser-scanning er en eksperimentel funktion i Chrome. Virker den ikke, så brug programmet på en computer (se hjælp).</p>
+    </section>
+
+    <section class="card panel" id="unsupported-panel" hidden>
+      <h2>Denne browser kan ikke scanne Bluetooth</h2>
+      <p>Du har to muligheder:</p>
+      <ol>
+        <li><strong>På en computer (anbefalet):</strong> Start iPad-finder-programmet (dobbeltklik på <code>start-windows.bat</code> eller <code>start-mac.command</code>). Så åbner siden af sig selv og bruger computerens Bluetooth.</li>
+        <li><strong>På en Android-telefon:</strong> Åbn siden i Chrome, gå til <code>chrome://flags</code>, slå <em>Experimental Web Platform features</em> til, og genstart Chrome.</li>
+      </ol>
+      <p class="muted">iPhone og iPad kan ikke scanne Bluetooth fra en hjemmeside – brug Find-appen der.</p>
+      <button type="button" class="btn" id="demo-btn">Prøv demo med simulerede enheder</button>
+    </section>
+
+    <section class="card panel error" id="error-panel" role="alert" hidden>
+      <h2>Bluetooth virker ikke lige nu</h2>
+      <p id="error-text"></p>
+      <p class="muted small-text" id="error-hint"></p>
+    </section>
+
+    <div class="toolbar" id="toolbar" hidden>
+      <div class="segmented" role="radiogroup" aria-label="Vis enheder">
+        <button type="button" role="radio" aria-checked="true" data-filter="candidates">iPads &amp; telefoner <span class="count" data-count="candidates">0</span></button>
+        <button type="button" role="radio" aria-checked="false" data-filter="apple">Apple <span class="count" data-count="apple">0</span></button>
+        <button type="button" role="radio" aria-checked="false" data-filter="all">Alle <span class="count" data-count="all">0</span></button>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="show-hidden">
+        <span>Vis skjulte (<span data-count="hidden">0</span>)</span>
+      </label>
+    </div>
+
+    <ul class="device-list" id="device-list" aria-label="Enheder i nærheden, stærkeste signal først"></ul>
+
+    <div class="empty" id="empty" hidden>
+      <div class="radar" aria-hidden="true"><span></span><span></span><span></span></div>
+      <p id="empty-text">Leder efter Bluetooth-enheder i nærheden …</p>
+      <div id="empty-help" hidden></div>
+    </div>
+  </main>
+
+  <section class="follow" id="follow" role="dialog" aria-modal="true" aria-labelledby="follow-title" hidden>
+    <div class="follow-inner">
+      <div class="follow-head">
+        <button type="button" class="btn ghost small" id="follow-close">← Liste</button>
+        <div class="follow-heading">
+          <h2 id="follow-title">Enhed</h2>
+          <p class="muted" id="follow-sub"></p>
+        </div>
+      </div>
+
+      <div class="gauge-wrap">
+        <svg class="gauge" viewBox="0 0 220 128" aria-hidden="true">
+          <defs>
+            <linearGradient id="gauge-gradient" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" class="stop-cold"/>
+              <stop offset="50%" class="stop-mild"/>
+              <stop offset="100%" class="stop-hot"/>
+            </linearGradient>
+          </defs>
+          <path class="gauge-track" d="M 20 115 A 90 90 0 0 1 200 115" pathLength="100"/>
+          <path class="gauge-fill" id="gauge-fill" d="M 20 115 A 90 90 0 0 1 200 115" pathLength="100" stroke-dasharray="0 100"/>
+          <g class="gauge-needle" id="gauge-needle"><line x1="110" y1="115" x2="110" y2="40"/><circle cx="110" cy="115" r="7"/></g>
+        </svg>
+        <div class="gauge-readout">
+          <div class="level" id="follow-level">–</div>
+          <div class="dbm" id="follow-dbm">– dBm</div>
+        </div>
+      </div>
+
+      <p class="hint" id="follow-hint"></p>
+      <div class="follow-row">
+        <span class="chip" id="follow-trend" data-direction="steady">Stabilt</span>
+        <span class="muted" id="follow-peak"></span>
+        <span class="muted" id="follow-seen"></span>
+      </div>
+
+      <svg class="sparkline" id="sparkline" viewBox="0 0 300 70" preserveAspectRatio="none" role="img" aria-label="Signalstyrke det seneste minut">
+        <line class="spark-grid" x1="0" y1="35" x2="300" y2="35"/>
+        <polyline class="spark-line" id="spark-line" points=""/>
+      </svg>
+      <p class="spark-caption muted">Signalstyrke det seneste minut – højere er tættere på.</p>
+
+      <div class="warning" id="follow-warning" role="status" hidden></div>
+
+      <div class="follow-actions">
+        <button type="button" class="btn big" id="sound-btn" aria-pressed="false">🔈 Slå lyd til</button>
+        <button type="button" class="btn big" id="follow-identify-btn" hidden>Identificér</button>
+        <button type="button" class="btn big danger" id="stop-btn">Stop søgning</button>
+      </div>
+      <p class="identify-result" id="follow-identify-result" hidden></p>
+
+      <details class="tips">
+        <summary>Tips til at finde den</summary>
+        <ul>
+          <li>Gå langsomt, og stå stille 2–3 sekunder hvert sted – signalet svinger.</li>
+          <li>Drej dig rundt: din krop dæmper signalet, så det er stærkest, når du vender mod iPad'en.</li>
+          <li>Hold computeren eller telefonen frit – ikke tæt ind til kroppen.</li>
+          <li>Kig under puder, i tasker, skuffer, bilen og sportstasken.</li>
+          <li>Ring op til iPad'en med FaceTime eller send den en besked. Så vågner skærmen, den sender oftere – og måske hører du den.</li>
+          <li>Sig højt „Hej Siri". Hører iPad'en dig, kan den svare – og iPad-finder kan se i signalet, at det er en iPad.</li>
+          <li>Har iPad'en mobildata? Åbn Wi-Fi-indstillingerne på din iPhone eller Mac (samme Apple-ID). Så svarer iPad'en måske med et signal, der også viser dens batteri.</li>
+        </ul>
+      </details>
+    </div>
+  </section>
+
+  <dialog class="help" id="help-dialog" aria-labelledby="help-title">
+    <form method="dialog" class="help-inner">
+      <h2 id="help-title">Sådan virker iPad-finder</h2>
+      <p>
+        Alle iPads, iPhones og mange andre enheder sender hele tiden små Bluetooth-signaler.
+        iPad-finder lytter efter dem og viser, hvor stærkt hvert signal er. Jo stærkere signal, jo tættere er du på.
+      </p>
+      <h3>Sådan leder du</h3>
+      <ol>
+        <li>Vælg <strong>iPads &amp; telefoner</strong>. Enheder med stærkest signal står øverst.</li>
+        <li>Tryk <strong>Ikke den</strong> ved enheder, du ved, hvad er (fx din telefon i hånden).</li>
+        <li>Tryk <strong>Identificér</strong> for at spørge enheden om dens model (kun når programmet kører på en computer). Svarer den fx <em>iPad13,1</em>, er det en iPad.</li>
+        <li>Tryk <strong>Find den</strong>, slå lyden til, og gå rundt. Hurtigere bip og rødere måler betyder varmere.</li>
+      </ol>
+      <h3>Godt at vide</h3>
+      <ul>
+        <li>iPad'en skal have strøm og Bluetooth slået til. Er batteriet fladt, eller er den i flytilstand, sender den ikke.</li>
+        <li>Afstanden er kun et skøn. Vægge, møbler og mennesker gør signalet svagere.</li>
+        <li>Apple-enheder skifter Bluetooth-adresse cirka hvert kvarter. Så kan enheden "forsvinde" og dukke op som en ny – iPad-finder prøver selv at finde den igen.</li>
+        <li>Det er ikke altid muligt at se forskel på en iPad og en iPhone ud fra signalet alene. Brug <strong>Identificér</strong> eller udelukkelsesmetoden.</li>
+        <li>Alt foregår lokalt på din enhed. Intet sendes til internettet.</li>
+      </ul>
+      <div class="help-actions">
+        <button class="btn primary" value="close">Luk</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div class="sr-only" id="sr-live" aria-live="polite"></div>
+</body>
+</html>

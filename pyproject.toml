@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ipad-finder"
+version = "1.0.0"
+description = "Find en mistet iPad eller telefon ved at scanne Bluetooth-signaler."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["bleak>=1.0,<4"]
+
+[project.scripts]
+ipad-finder = "ipad_finder.cli:main"
+
+[tool.setuptools]
+packages = ["ipad_finder"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
