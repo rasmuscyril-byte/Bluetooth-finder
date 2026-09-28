@@ -5,6 +5,7 @@ import { createBeeper } from "./audio.js";
 import { Tracker } from "./engine/tracker.js";
 import { createBridgeSource, detectBridge } from "./sources/bridge.js";
 import { createDemoSource } from "./sources/demo.js";
+import { detectPlatform } from "./platform.js";
 import { createWebBluetoothSource, isWebBluetoothScanSupported } from "./sources/webbluetooth.js";
 import { $, $$, setText, storage } from "./ui/dom.js";
 import { createFollowView } from "./ui/follow.js";
@@ -226,7 +227,46 @@ async function chooseSource() {
     return;
   }
   setStatus({ state: "unsupported", message: null });
-  $("#unsupported-panel").hidden = false;
+  showUnsupported(detectPlatform());
+}
+
+function showUnsupported(platform) {
+  const panel = $("#unsupported-panel");
+  for (const variant of $$("[data-platform]", panel)) variant.hidden = variant.dataset.platform !== platform.kind;
+  setText($("#page-url"), location.href.replace(/[?#].*$/, ""));
+  panel.hidden = false;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Older browsers or no permission: fall back to a temporary text field.
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.setAttribute("readonly", "");
+    field.style.position = "fixed";
+    field.style.opacity = "0";
+    document.body.append(field);
+    field.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    field.remove();
+    return ok;
+  }
+}
+
+for (const button of $$("[data-copy]")) {
+  button.addEventListener("click", async () => {
+    const text = document.getElementById(button.dataset.copy)?.textContent.trim() || "";
+    const ok = await copyText(text);
+    showToast(ok ? "Kopieret. Sæt den ind i adresselinjen i en ny fane." : "Kunne ikke kopiere – markér teksten og kopiér den selv.");
+  });
 }
 
 // ------------------------------------------------------------------ identify
@@ -487,10 +527,46 @@ $("#tip-dismiss").addEventListener("click", () => {
   storage.set(TIP_KEY, true);
 });
 
+// ------------------------------------------------------------------ install as an app
+
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  installPrompt = event;
+  $("#install-btn").hidden = false;
+});
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  $("#install-btn").hidden = true;
+  showToast("iPad-finder ligger nu på din startskærm.");
+});
+$("#install-btn").addEventListener("click", async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  try {
+    await installPrompt.userChoice;
+  } catch {
+    /* ignore */
+  }
+  installPrompt = null;
+  $("#install-btn").hidden = true;
+});
+
+function registerServiceWorker() {
+  // Only for the web version (https). The computer program serves the page
+  // over http://127.0.0.1 and must never get a cached copy in between.
+  const forced = new URLSearchParams(location.search).has("sw");
+  if (!("serviceWorker" in navigator) || (location.protocol !== "https:" && !forced)) return;
+  navigator.serviceWorker.register("sw.js").catch(() => {
+    /* offline support is a bonus */
+  });
+}
+
 // ------------------------------------------------------------------ go
 
 window.__ipadFinderStarted = true;
 $("#boot-fallback")?.remove();
+registerServiceWorker();
 renderStatus();
 requestAnimationFrame(frame);
 chooseSource();

@@ -21,6 +21,38 @@ hvis lyden ikke hjælper, eller hvis du ikke kan logge ind lige nu.
 
 ---
 
+## Brug den på din Android-telefon
+
+Web-appen kan køre direkte på en Android-telefon i **Google Chrome** og kan lægges på startskærmen som en app.
+
+**A. Læg siden på nettet (én gang, 2 minutter – kan gøres fra telefonen eller computeren på github.com):**
+
+1. Åbn repoet på GitHub, og gå til **Settings → General**. Rul ned til **Danger Zone**, tryk
+   **Change repository visibility**, og vælg **Public**. (GitHub Pages er kun gratis for offentlige repositories.
+   Koden indeholder ingen personlige oplysninger.)
+2. Gå til **Settings → Pages**. Under **Build and deployment** vælger du **Source: Deploy from a branch**,
+   **Branch:** `claude/ipad-finder-bluetooth-z4rn1r` og mappen **/ (root)**. Tryk **Save**.
+3. Vent 1–2 minutter. Så ligger iPad-finder på **https://rasmuscyril-byte.github.io/Bluetooth-finder/**
+
+**B. På telefonen:**
+
+1. Åbn adressen i **Chrome** (ikke Samsung Internet eller Firefox).
+2. Første gang viser siden en kort guide: kopiér adressen `chrome://flags/#enable-experimental-web-platform-features`,
+   sæt den ind i en ny fane, vælg **Enabled** ved *Experimental Web Platform features*, og tryk **Relaunch**.
+3. Gå tilbage til iPad-finder, tryk **Start scanning**, og tryk **Tillad**.
+   Kommer der en fejl, så giv Chrome tilladelsen **Enheder i nærheden**
+   (Android-indstillinger → Apps → Chrome → Tilladelser), og slå Bluetooth til.
+4. Tryk **Installér** øverst (eller Chrome-menuen **⋮ → Føj til startskærm**), så har du den som en app.
+
+Godt at vide på telefonen:
+
+- Hold skærmen tændt, mens du leder – Android stopper scanningen, når skærmen slukker, eller når du skifter app.
+  Så viser iPad-finder en **Fortsæt scanning**-knap.
+- Android sætter også scanningen på pause efter cirka 10 minutter. Tryk **Fortsæt scanning**, når knappen dukker op.
+- **Identificér** findes kun i computer-versionen. På telefonen bruger du udelukkelsesmetoden og varm/kold-måleren.
+
+---
+
 ## 2. Kom i gang
 
 Du skal bruge en computer med Bluetooth – helst en bærbar, så du kan gå rundt med den.
@@ -63,17 +95,10 @@ eller også kan du hente Python på [python.org](https://www.python.org/download
 ./start-linux.sh
 ```
 
-### Android-telefon (eksperimentelt)
+### Android-telefon
 
-Chrome på Android kan scanne Bluetooth direkte fra en hjemmeside, hvis du slår en eksperimentel funktion til:
-
-1. Skriv `chrome://flags` i adresselinjen, søg efter **Experimental Web Platform features**, vælg **Enabled** og genstart Chrome.
-2. Åbn iPad-finder-siden via **https** (se nedenfor) og tryk **Start scanning**. Tillad Bluetooth (og placering).
-
-Siden kan lægges på nettet med GitHub Pages. Det er gratis for offentlige repositories – er dit repository privat,
-kræver Pages et betalt GitHub-abonnement, eller at du gør det offentligt (**Settings → General → Change visibility**).
-Gå derefter til **Settings → Pages**, vælg **Deploy from a branch**, vælg grenen og mappen **/ (root)**, og gem.
-Så ligger siden på `https://rasmuscyril-byte.github.io/Bluetooth-finder/`.
+Chrome på Android kan scanne Bluetooth direkte fra en hjemmeside. Så skal du ikke bruge en computer – telefonen i
+hånden *er* scanneren. Se [**Brug den på din Android-telefon**](#brug-den-på-din-android-telefon) øverst.
 
 > iPhone og iPad kan ikke scanne Bluetooth fra en hjemmeside – Apple tillader det ikke. Brug en computer eller en Android-telefon.
 

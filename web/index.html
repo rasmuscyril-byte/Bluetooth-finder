@@ -7,6 +7,8 @@
   <meta name="description" content="Find din mistede iPad eller telefon ved at følge dens Bluetooth-signal – varmere og koldere.">
   <title>iPad-finder</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E">
+  <meta name="theme-color" content="#0a63d6">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="css/app.css">
   <script src="js/boot.js" defer></script>
   <script type="module" src="js/main.js"></script>
@@ -24,6 +26,7 @@
       <span class="status-text" id="status-text">Starter …</span>
     </div>
     <div class="top-actions">
+      <button type="button" class="btn ghost small" id="install-btn" hidden>Installér</button>
       <button type="button" class="btn ghost small icon" id="help-btn" aria-haspopup="dialog" aria-label="Hjælp og tips">?</button>
     </div>
   </header>
@@ -54,19 +57,60 @@
 
     <section class="card panel" id="start-panel" hidden>
       <h2>Klar til at scanne</h2>
-      <p>Tryk på knappen og giv browseren lov til at bruge Bluetooth.</p>
+      <p>Tryk på knappen, og tryk <strong>Tillad</strong>, når Chrome spørger om lov til at bruge Bluetooth.</p>
       <button type="button" class="btn primary big" id="start-btn">Start scanning</button>
+      <p class="muted small-text">
+        Kommer der en fejl? Så giv Chrome tilladelsen <strong>Enheder i nærheden</strong>:
+        Android-indstillinger → Apps → Chrome → Tilladelser. Slå også Bluetooth til.
+      </p>
       <p class="muted small-text">Browser-scanning er en eksperimentel funktion i Chrome. Virker den ikke, så <a href="#help-computer" data-open-help="help-computer">brug programmet på en computer</a>.</p>
     </section>
 
     <section class="card panel" id="unsupported-panel" hidden>
-      <h2>Denne browser kan ikke scanne Bluetooth</h2>
-      <p>Du har to muligheder:</p>
-      <ol>
-        <li><strong>På en computer (anbefalet):</strong> Hent og start iPad-finder-programmet – <a href="#help-computer" data-open-help="help-computer">sådan gør du</a>. Så åbner siden af sig selv og bruger computerens Bluetooth.</li>
-        <li><strong>På en Android-telefon:</strong> Åbn siden i Chrome, gå til <code>chrome://flags</code>, slå <em>Experimental Web Platform features</em> til, og genstart Chrome.</li>
-      </ol>
-      <p class="muted">iPhone og iPad kan ikke scanne Bluetooth fra en hjemmeside – brug Find-appen der.</p>
+      <div data-platform="android-chrome" hidden>
+        <h2>Næsten klar – slå Bluetooth-scanning til i Chrome</h2>
+        <p>Det skal kun gøres én gang:</p>
+        <ol class="steps">
+          <li>
+            Tryk <strong>Kopiér</strong> for at kopiere denne adresse:
+            <span class="copy-row">
+              <code id="flag-url">chrome://flags/#enable-experimental-web-platform-features</code>
+              <button type="button" class="btn small" data-copy="flag-url">Kopiér</button>
+            </span>
+          </li>
+          <li>Åbn en ny fane i Chrome, sæt adressen ind i adresselinjen, og tryk Enter.</li>
+          <li>Ved <strong>Experimental Web Platform features</strong> vælger du <strong>Enabled</strong>.</li>
+          <li>Tryk <strong>Relaunch</strong> nederst, så Chrome genstarter.</li>
+          <li>Kom tilbage til denne side – så kan du trykke <strong>Start scanning</strong>.</li>
+        </ol>
+        <p class="muted small-text">Giv også Chrome tilladelsen <strong>Enheder i nærheden</strong> (Android-indstillinger → Apps → Chrome → Tilladelser), og slå Bluetooth til.</p>
+      </div>
+      <div data-platform="android-other" hidden>
+        <h2>Åbn siden i Google Chrome</h2>
+        <p>Kun Google Chrome kan scanne efter Bluetooth-signaler fra en hjemmeside. Kopiér adressen, og åbn den i Chrome:</p>
+        <p class="copy-row">
+          <code id="page-url"></code>
+          <button type="button" class="btn small" data-copy="page-url">Kopiér</button>
+        </p>
+      </div>
+      <div data-platform="ios" hidden>
+        <h2>iPhone og iPad kan ikke scanne her</h2>
+        <p>Apple tillader ikke hjemmesider at scanne efter Bluetooth-signaler. Brug i stedet <strong>Find</strong>-appen:</p>
+        <ol class="steps">
+          <li>Åbn <strong>Find</strong>-appen (eller <a href="https://www.icloud.com/find" target="_blank" rel="noopener noreferrer">icloud.com/find</a>).</li>
+          <li>Vælg <strong>Enheder</strong> og derefter din iPad.</li>
+          <li>Tryk <strong>Afspil lyd</strong> – den spiller lyd, selvom den står på lydløs.</li>
+        </ol>
+      </div>
+      <div data-platform="desktop" hidden>
+        <h2>Denne browser kan ikke scanne Bluetooth</h2>
+        <p>Du har to muligheder:</p>
+        <ol>
+          <li><strong>På en computer (anbefalet):</strong> Hent og start iPad-finder-programmet – <a href="#help-computer" data-open-help="help-computer">sådan gør du</a>. Så åbner siden af sig selv og bruger computerens Bluetooth.</li>
+          <li><strong>På en Android-telefon:</strong> Åbn siden i Chrome, gå til <code>chrome://flags</code>, slå <em>Experimental Web Platform features</em> til, og genstart Chrome.</li>
+        </ol>
+        <p class="muted">iPhone og iPad kan ikke scanne Bluetooth fra en hjemmeside – brug Find-appen der.</p>
+      </div>
       <button type="button" class="btn" id="demo-btn">Prøv demo med simulerede enheder</button>
     </section>
 

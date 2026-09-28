@@ -7,7 +7,8 @@
 // Screenshots are written to tests/e2e/screenshots/.
 
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -93,11 +94,17 @@ const bridgePort = await freePort();
 const staticPort = await freePort();
 const bridge = start(python, ["-m", "ipad_finder", "--fake-scanner", "--no-browser", "--port", String(bridgePort)]);
 const statics = start(python, ["-m", "http.server", String(staticPort), "--bind", "127.0.0.1", "--directory", "web"]);
+// GitHub Pages layout: the repository is served under /Bluetooth-finder/.
+const pagesRoot = mkdtempSync(join(tmpdir(), "ipad-finder-pages-"));
+symlinkSync(root, join(pagesRoot, "Bluetooth-finder"), "dir");
+const pagesPort = await freePort();
+const pages = start(python, ["-m", "http.server", String(pagesPort), "--bind", "127.0.0.1", "--directory", pagesRoot]);
 const browser = await chromium.launch();
 
 try {
   await waitFor(`http://127.0.0.1:${bridgePort}/api/status`);
   await waitFor(`http://127.0.0.1:${staticPort}/index.html`);
+  await waitFor(`http://127.0.0.1:${pagesPort}/Bluetooth-finder/index.html`);
 
   // ---------------------------------------------------------------- bridge
   console.log("Bridge mode (fake scanner, phone-sized screen)");
@@ -353,6 +360,111 @@ try {
     check(real.length === 0, `no console errors with Web Bluetooth (${real.join(" | ")})`);
     await page.close();
   }
+  // ---------------------------------------------------------------- the phone (GitHub Pages)
+  const ANDROID_CHROME_UA =
+    "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36";
+  console.log("Phone: Android Chrome on the GitHub Pages address");
+  {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      userAgent: ANDROID_CHROME_UA,
+      isMobile: true,
+      hasTouch: true,
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await page.goto(`http://127.0.0.1:${pagesPort}/Bluetooth-finder/`);
+    await page.waitForURL(/\/Bluetooth-finder\/web\/$/, { timeout: 8000 });
+    check(true, "the Pages address opens the app in web/");
+    await page.waitForSelector('#unsupported-panel [data-platform="android-chrome"]:not([hidden])', { timeout: 8000 });
+    check(true, "Android Chrome without the flag gets the step-by-step Chrome guide");
+    check(await page.locator('#unsupported-panel [data-platform="ios"]').isHidden(), "the iPhone text is not shown on Android");
+    await page.locator('[data-copy="flag-url"]').click();
+    await page.waitForTimeout(300);
+    const clip = await page.evaluate(() => navigator.clipboard.readText());
+    check(clip === "chrome://flags/#enable-experimental-web-platform-features", "'Kopiér' copies the chrome://flags address");
+    check(await noHorizontalScroll(page), "no horizontal scrolling in the Chrome guide");
+    await page.screenshot({ path: join(shots, "phone-android-guide.png"), fullPage: true });
+
+    const manifest = await page.evaluate(async () => {
+      const href = document.querySelector('link[rel="manifest"]').href;
+      const json = await (await fetch(href)).json();
+      const icons = await Promise.all(json.icons.map(async (icon) => (await fetch(new URL(icon.src, href))).status));
+      return { json, icons };
+    });
+    check(manifest.json.display === "standalone" && manifest.json.lang === "da", "web app manifest is valid");
+    check(manifest.icons.every((status) => status === 200), "all app icons load");
+    const real = errors.filter((text) => !text.includes("404"));
+    check(real.length === 0, `no console errors on the phone (${real.join(" | ")})`);
+    await context.close();
+  }
+
+  console.log("Phone: scanning available, installable, works offline");
+  {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: ANDROID_CHROME_UA, isMobile: true, hasTouch: true });
+    await context.addInitScript(() => {
+      const target = new EventTarget();
+      target.requestLEScan = async () => {
+        setInterval(() => {
+          const event = new Event("advertisementreceived");
+          Object.assign(event, {
+            device: { id: "phone-device-1", name: null },
+            rssi: -64,
+            manufacturerData: new Map([[0x004c, new DataView(new Uint8Array([0x10, 0x05, 0x13, 0x18, 1, 2, 3]).buffer)]]),
+            serviceData: new Map(),
+            uuids: [],
+          });
+          target.dispatchEvent(event);
+        }, 150);
+        return { active: true, stop() { this.active = false; } };
+      };
+      Object.defineProperty(navigator, "bluetooth", { value: target, configurable: true });
+    });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    const appUrl = `http://127.0.0.1:${pagesPort}/Bluetooth-finder/web/?sw`;
+    await page.goto(appUrl);
+    await page.waitForSelector("#start-panel:not([hidden])", { timeout: 8000 });
+    check((await page.locator("#start-panel").innerText()).includes("Enheder i nærheden"), "start panel explains the Android permission");
+    await page.locator("#start-btn").click();
+    await page.waitForSelector(".device", { timeout: 8000 });
+    check((await page.locator(".device .label").first().innerText()) === "iPhone, iPad eller Mac", "scanning on the phone lists the iPad candidate");
+    await page.screenshot({ path: join(shots, "phone-scanning.png"), fullPage: true });
+
+    const swReady = await page.evaluate(async () => {
+      const registration = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(() => r(null), 8000))]);
+      return Boolean(registration?.active);
+    });
+    check(swReady, "the service worker is installed (offline support)");
+    await page.reload();
+    await page.waitForTimeout(1000);
+    await context.setOffline(true);
+    await page.reload();
+    await page.waitForSelector("#start-panel:not([hidden])", { timeout: 8000 });
+    check(true, "the app still opens without a network connection");
+    await context.setOffline(false);
+    const real = errors.filter((text) => !text.includes("404") && !/ERR_INTERNET_DISCONNECTED|Failed to fetch/.test(text));
+    check(real.length === 0, `no console errors while scanning on the phone (${real.join(" | ")})`);
+    await context.close();
+  }
+
+  for (const [label, userAgent, kind] of [
+    ["Samsung Internet", "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36", "android-other"],
+    ["iPhone Safari", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", "ios"],
+  ]) {
+    console.log(`Phone: ${label}`);
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:${pagesPort}/Bluetooth-finder/web/`);
+    await page.waitForSelector(`#unsupported-panel [data-platform="${kind}"]:not([hidden])`, { timeout: 8000 });
+    check(true, `${label} gets its own instructions`);
+    if (kind === "android-other") {
+      check((await page.locator("#page-url").innerText()).endsWith("/Bluetooth-finder/web/"), "the page address to open in Chrome is shown");
+    }
+    await page.screenshot({ path: join(shots, `phone-${kind}.png`), fullPage: true });
+    await context.close();
+  }
 } catch (error) {
   failures.push(`Unexpected error: ${error.stack || error}`);
   console.error(error);
@@ -361,6 +473,8 @@ try {
   await browser.close();
   bridge.kill();
   statics.kill();
+  pages.kill();
+  rmSync(pagesRoot, { recursive: true, force: true });
 }
 
 console.log(`\n${checks - failures.length}/${checks} checks passed. Screenshots in ${shots}`);
