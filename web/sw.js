@@ -2,6 +2,7 @@
 // Network first (so updates arrive straight away), cached copy as fallback.
 
 const CACHE = "ipad-finder-v1";
+const NETWORK_TIMEOUT_MS = 3000;
 const SHELL = [
   "./",
   "index.html",
@@ -56,20 +57,29 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin || url.pathname.includes("/api/")) return;
   if ((request.headers.get("accept") || "").includes("text/event-stream")) return;
 
+  // Network first, but don't wait forever on a weak connection (garage, car
+  // park, clubhouse …): after a few seconds the cached copy wins, and the
+  // network answer still refreshes the cache in the background.
+  const network = fetch(request).then(async (response) => {
+    if (response.ok) {
+      const cache = await caches.open(CACHE);
+      await cache.put(request, response.clone());
+    }
+    return response;
+  });
+  event.waitUntil(network.catch(() => {}));
   event.respondWith(
     (async () => {
+      const cached = await caches.match(request, { ignoreSearch: true });
+      if (!cached) return network;
+      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS));
       try {
-        const response = await fetch(request);
-        if (response.ok) {
-          const cache = await caches.open(CACHE);
-          await cache.put(request, response.clone());
-        }
-        return response;
-      } catch (error) {
-        const cached = await caches.match(request, { ignoreSearch: true });
-        if (cached) return cached;
-        throw error;
+        const response = await Promise.race([network, timeout]);
+        if (response && (response.ok || response.status < 500)) return response;
+      } catch {
+        /* offline: use the cache */
       }
+      return cached;
     })(),
   );
 });

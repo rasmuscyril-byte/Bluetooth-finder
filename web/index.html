@@ -26,7 +26,7 @@
       <span class="status-text" id="status-text">Starter …</span>
     </div>
     <div class="top-actions">
-      <button type="button" class="btn ghost small" id="install-btn" hidden>Installér</button>
+      <button type="button" class="btn ghost small" id="install-btn" aria-label="Installér som app på startskærmen" hidden><span aria-hidden="true">📲</span><span class="install-text">Installér</span></button>
       <button type="button" class="btn ghost small icon" id="help-btn" aria-haspopup="dialog" aria-label="Hjælp og tips">?</button>
     </div>
   </header>
@@ -36,10 +36,11 @@
   <main id="main">
     <section class="card panel" id="boot-fallback" role="alert" hidden>
       <h2>Siden kunne ikke starte</h2>
-      <p>
+      <p data-boot="file">
         Åbn ikke HTML-filen direkte. Start i stedet programmet: dobbeltklik på <code>start-windows.bat</code> (Windows)
         eller <code>start-mac.command</code> (Mac). Så åbner iPad-finder af sig selv i browseren.
       </p>
+      <p data-boot="web" hidden>Siden kunne ikke indlæses helt. Tjek internetforbindelsen, og genindlæs siden.</p>
     </section>
 
     <section class="card tip" id="findmy-tip" aria-labelledby="findmy-title">
@@ -88,6 +89,7 @@
       <div data-platform="android-other" hidden>
         <h2>Åbn siden i Google Chrome</h2>
         <p>Kun Google Chrome kan scanne efter Bluetooth-signaler fra en hjemmeside. Kopiér adressen, og åbn den i Chrome:</p>
+        <p class="muted small-text">Er du inde i en anden app, fx Messenger eller Facebook? Tryk på menuen (⋮) og vælg <strong>Åbn i Chrome</strong> eller <strong>Åbn i browser</strong>.</p>
         <p class="copy-row">
           <code id="page-url"></code>
           <button type="button" class="btn small" data-copy="page-url">Kopiér</button>
@@ -246,7 +248,7 @@
         <li><strong>Mac:</strong> Højreklik på <code>start-mac.command</code> og vælg <strong>Åbn</strong>. Giv Terminal lov til at bruge Bluetooth.</li>
         <li><strong>Linux:</strong> Kør <code>./start-linux.sh</code>.</li>
       </ol>
-      <p>Mere hjælp står i filen <code>README.md</code>, der følger med programmet.</p>
+      <p>Mere hjælp står i vejledningen: <a href="https://github.com/rasmuscyril-byte/Bluetooth-finder#readme" target="_blank" rel="noopener noreferrer">README på GitHub</a>.</p>
       <div class="help-actions">
         <button class="btn primary" value="close">Luk</button>
       </div>

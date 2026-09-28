@@ -3,7 +3,8 @@
 Find en mistet iPad (eller telefon) ved at følge dens Bluetooth-signal. Programmet viser en
 **varm/kold-måler** og kan bippe som en **geigertæller**: jo tættere du kommer, jo hurtigere bip.
 
-Alt kører lokalt på din egen computer. Intet sendes til internettet.
+Den kører på en computer (Windows, Mac, Linux) eller direkte på en Android-telefon. Alt foregår lokalt på din egen
+enhed – intet sendes til internettet.
 
 ---
 
@@ -27,16 +28,20 @@ Web-appen kan køre direkte på en Android-telefon i **Google Chrome** og kan l�
 
 **A. Læg siden på nettet (én gang, 2 minutter – kan gøres fra telefonen eller computeren på github.com):**
 
-1. Åbn repoet på GitHub, og gå til **Settings → General**. Rul ned til **Danger Zone**, tryk
-   **Change repository visibility**, og vælg **Public**. (GitHub Pages er kun gratis for offentlige repositories.
-   Koden indeholder ingen personlige oplysninger.)
-2. Gå til **Settings → Pages**. Under **Build and deployment** vælger du **Source: Deploy from a branch**,
-   **Branch:** `claude/ipad-finder-bluetooth-z4rn1r` og mappen **/ (root)**. Tryk **Save**.
-3. Vent 1–2 minutter. Så ligger iPad-finder på **https://rasmuscyril-byte.github.io/Bluetooth-finder/**
+Åbn linkene i **Chrome** – ikke i GitHub-appen, som ikke kan ændre indstillinger.
+
+1. Åbn **https://github.com/rasmuscyril-byte/Bluetooth-finder/settings** og rul helt ned til **Danger Zone**.
+   Ved *Change repository visibility* trykker du **Change visibility → Change to public** og bekræfter tre gange
+   (evt. med adgangskode). GitHub Pages er kun gratis for offentlige repositories; koden indeholder ingen personlige
+   oplysninger.
+2. Åbn **https://github.com/rasmuscyril-byte/Bluetooth-finder/settings/pages**. Under **Build and deployment**
+   vælger du **Source: Deploy from a branch**, **Branch:** `claude/ipad-finder-bluetooth-z4rn1r` og mappen
+   **/ (root)**. Tryk **Save**.
+3. Vent normalt 1–2 minutter (højst 10). Så ligger iPad-finder på **https://rasmuscyril-byte.github.io/Bluetooth-finder/**
 
 **B. På telefonen:**
 
-1. Åbn adressen i **Chrome** (ikke Samsung Internet eller Firefox).
+1. Åbn adressen i **Chrome** (ikke Samsung Internet, Firefox eller den indbyggede browser i Messenger/Facebook).
 2. Første gang viser siden en kort guide: kopiér adressen `chrome://flags/#enable-experimental-web-platform-features`,
    sæt den ind i en ny fane, vælg **Enabled** ved *Experimental Web Platform features*, og tryk **Relaunch**.
 3. Gå tilbage til iPad-finder, tryk **Start scanning**, og tryk **Tillad**.
@@ -53,8 +58,9 @@ Godt at vide på telefonen:
 
 ---
 
-## 2. Kom i gang
+## 2. Kom i gang på en computer
 
+(Har du en Android-telefon, kan du i stedet bruge [telefon-versionen](#brug-den-på-din-android-telefon).)
 Du skal bruge en computer med Bluetooth – helst en bærbar, så du kan gå rundt med den.
 
 **Hent programmet:** Tryk på den grønne knap **Code → Download ZIP** her på GitHub, og pak ZIP-filen ud.
@@ -170,6 +176,8 @@ Start programmet med `--demo`. Så vises nogle simulerede enheder, og du kan pr�
 | Problem | Løsning |
 | --- | --- |
 | "Bluetooth er slået fra" | Slå Bluetooth til på computeren. Programmet prøver selv igen hvert 5. sekund. |
+| Telefon: fejl ved Start scanning | Slå Bluetooth til, giv Chrome tilladelsen *Enheder i nærheden* (Android-indstillinger → Apps → Chrome → Tilladelser), og tryk **Start scanning** igen. |
+| Telefon: listen går i stå | Tryk **Fortsæt scanning**. Hold skærmen tændt, og bliv på siden, mens du leder. |
 | Mac: ingen enheder | Giv Terminal adgang: **Systemindstillinger → Anonymitet og sikkerhed → Bluetooth**. |
 | Windows: ingen enheder | Computeren skal have Bluetooth 4.0 eller nyere (Bluetooth Low Energy) og Windows 10 (1709) eller nyere. |
 | Linux: "Bluetooth-tjenesten svarer ikke" | `sudo systemctl start bluetooth` |

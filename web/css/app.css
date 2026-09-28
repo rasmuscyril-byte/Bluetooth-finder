@@ -976,6 +976,27 @@ main {
   }
 }
 
+@media (max-width: 420px) {
+  .install-text {
+    display: none;
+  }
+
+  /* On phones the status gets its own line, so it is always readable. */
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .top-actions {
+    margin-left: auto;
+  }
+
+  .status {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
 @media (max-width: 380px) {
   .segmented {
     width: 100%;

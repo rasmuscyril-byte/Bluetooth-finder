@@ -41,3 +41,18 @@ test("reports whether Web Bluetooth scanning is available", () => {
   const nav = { userAgent: UA.androidChrome, bluetooth: { requestLEScan() {} } };
   assert.equal(detectPlatform(nav).scanning, true);
 });
+
+test("in-app browsers and Brave are not treated as Chrome", () => {
+  const webview =
+    "Mozilla/5.0 (Linux; Android 14; SM-S911B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.100 Mobile Safari/537.36";
+  assert.equal(detectPlatform({ userAgent: webview }).kind, "android-other");
+  assert.equal(detectPlatform({ userAgent: `${webview} [FB_IAB/Orca-Android;FBAV/480.0.0.0;]` }).kind, "android-other");
+  assert.equal(detectPlatform({ userAgent: `${webview} Instagram 350.0.0.0 Android` }).kind, "android-other");
+  const chromeUa =
+    "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36";
+  assert.equal(detectPlatform({ userAgent: chromeUa, userAgentData: { platform: "Android", brands: [{ brand: "Android WebView" }, { brand: "Chromium" }] } }).kind, "android-other");
+  assert.equal(detectPlatform({ userAgent: chromeUa, userAgentData: { platform: "Android", brands: [{ brand: "Brave" }, { brand: "Chromium" }] } }).kind, "android-other");
+  assert.equal(detectPlatform({ userAgent: chromeUa, brave: {} }).kind, "android-other");
+  assert.equal(detectPlatform({ userAgent: chromeUa }).kind, "android-chrome");
+  assert.equal(detectPlatform({ userAgent: webview }).inApp, true);
+});

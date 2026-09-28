@@ -361,6 +361,14 @@ try {
     await page.close();
   }
   // ---------------------------------------------------------------- the phone (GitHub Pages)
+  // Playwright changes navigator.userAgent but not the client hints, so fake
+  // navigator.userAgentData the way the real browser reports it.
+  const fakeClientHints = (context, brands) =>
+    context.addInitScript((brandList) => {
+      const value = brandList ? { brands: brandList.map((brand) => ({ brand, version: "129" })), mobile: true, platform: "Android" } : undefined;
+      Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => value, configurable: true });
+    }, brands);
+  const CHROME_BRANDS = ["Google Chrome", "Chromium", "Not=A?Brand"];
   const ANDROID_CHROME_UA =
     "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36";
   console.log("Phone: Android Chrome on the GitHub Pages address");
@@ -372,6 +380,7 @@ try {
       hasTouch: true,
       permissions: ["clipboard-read", "clipboard-write"],
     });
+    await fakeClientHints(context, CHROME_BRANDS);
     const page = await context.newPage();
     const errors = watchErrors(page);
     await page.goto(`http://127.0.0.1:${pagesPort}/Bluetooth-finder/`);
@@ -386,6 +395,20 @@ try {
     check(clip === "chrome://flags/#enable-experimental-web-platform-features", "'Kopiér' copies the chrome://flags address");
     check(await noHorizontalScroll(page), "no horizontal scrolling in the Chrome guide");
     await page.screenshot({ path: join(shots, "phone-android-guide.png"), fullPage: true });
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.evaluate(() => {
+      const event = new Event("beforeinstallprompt");
+      event.prompt = () => {};
+      event.userChoice = Promise.resolve({ outcome: "dismissed" });
+      window.dispatchEvent(event);
+    });
+    await page.waitForTimeout(200);
+    check(await page.locator("#install-btn").isVisible(), "the Installér button appears when Chrome offers installation");
+    check(
+      (await page.evaluate(() => document.getElementById("status-text").getBoundingClientRect().width)) >= 80,
+      "the status stays readable next to the install button at 360 px",
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
 
     const manifest = await page.evaluate(async () => {
       const href = document.querySelector('link[rel="manifest"]').href;
@@ -403,6 +426,7 @@ try {
   console.log("Phone: scanning available, installable, works offline");
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: ANDROID_CHROME_UA, isMobile: true, hasTouch: true });
+    await fakeClientHints(context, CHROME_BRANDS);
     await context.addInitScript(() => {
       const target = new EventTarget();
       target.requestLEScan = async () => {
@@ -449,12 +473,14 @@ try {
     await context.close();
   }
 
-  for (const [label, userAgent, kind] of [
-    ["Samsung Internet", "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36", "android-other"],
-    ["iPhone Safari", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", "ios"],
+  for (const [label, userAgent, kind, brands] of [
+    ["Samsung Internet", "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36", "android-other", ["Samsung Internet", "Chromium"]],
+    ["Messenger in-app browser", "Mozilla/5.0 (Linux; Android 14; SM-S911B Build/UP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.0.0 Mobile Safari/537.36 [FB_IAB/Orca-Android;FBAV/480.0.0.0;]", "android-other", ["Android WebView", "Chromium"]],
+    ["iPhone Safari", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", "ios", null],
   ]) {
     console.log(`Phone: ${label}`);
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent, isMobile: true, hasTouch: true });
+    await fakeClientHints(context, brands);
     const page = await context.newPage();
     await page.goto(`http://127.0.0.1:${pagesPort}/Bluetooth-finder/web/`);
     await page.waitForSelector(`#unsupported-panel [data-platform="${kind}"]:not([hidden])`, { timeout: 8000 });
@@ -462,7 +488,7 @@ try {
     if (kind === "android-other") {
       check((await page.locator("#page-url").innerText()).endsWith("/Bluetooth-finder/web/"), "the page address to open in Chrome is shown");
     }
-    await page.screenshot({ path: join(shots, `phone-${kind}.png`), fullPage: true });
+    await page.screenshot({ path: join(shots, `phone-${label.replace(/\W+/g, "-").toLowerCase()}.png`), fullPage: true });
     await context.close();
   }
 } catch (error) {
