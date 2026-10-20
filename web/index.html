@@ -125,6 +125,18 @@
     <section class="card panel error" id="error-panel" role="alert" hidden>
       <h2>Bluetooth virker ikke lige nu</h2>
       <p id="error-text"></p>
+      <div id="permission-help" hidden>
+        <ol class="steps">
+          <li>Tryk på knappen herunder. Chrome åbner en liste over enheder i nærheden.</li>
+          <li>Står der, at Chrome skal have tilladelse, så tryk på linket i listen og vælg <strong>Tillad</strong>.</li>
+          <li>Luk listen igen (du behøver ikke vælge en enhed), og tryk <strong>Start scanning</strong>.</li>
+        </ol>
+        <button type="button" class="btn primary big" id="permission-btn">Giv Chrome adgang til Bluetooth</button>
+        <p class="muted small-text">
+          Virker det ikke? Åbn Android-indstillinger → Apps → Chrome → Tilladelser → <strong>Enheder i nærheden</strong> →
+          Tillad. Har telefonen Android 11 eller ældre, så slå også <strong>Placering</strong> til.
+        </p>
+      </div>
       <p class="muted small-text" id="error-hint"></p>
     </section>
 

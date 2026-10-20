@@ -6,7 +6,7 @@ import { Tracker } from "./engine/tracker.js";
 import { createBridgeSource, detectBridge } from "./sources/bridge.js";
 import { createDemoSource } from "./sources/demo.js";
 import { detectPlatform } from "./platform.js";
-import { createWebBluetoothSource, isWebBluetoothScanSupported } from "./sources/webbluetooth.js";
+import { createWebBluetoothSource, isWebBluetoothScanSupported, requestBluetoothPermission } from "./sources/webbluetooth.js";
 import { $, $$, setText, storage } from "./ui/dom.js";
 import { createFollowView } from "./ui/follow.js";
 import { createDeviceList } from "./ui/list.js";
@@ -137,6 +137,7 @@ function showToast(text, { ms = 4000, action = null, onAction = null } = {}) {
 function setStatus(status) {
   state.sourceStatus = status;
   renderStatus();
+  markDirty(); // the empty-list text depends on the status
   if (!wantsWakeLock()) releaseWakeLock();
 }
 
@@ -155,9 +156,13 @@ function renderStatus() {
     setText($("#error-text"), message);
     setText($("#error-hint"), errorHint(message));
   }
+  const permissionProblem =
+    showError && state.source?.kind === "webbluetooth" && ["NotFoundError", "NotSupportedError", "NotAllowedError", "SecurityError"].includes(state.sourceStatus.errorName);
+  $("#permission-help").hidden = !permissionProblem;
 }
 
 function errorHint(message) {
+  if (state.source?.kind === "webbluetooth") return state.sourceStatus.detail || "";
   if (state.source?.kind !== "bridge") return "";
   if (/Bluetooth-programmet/.test(message)) return "Start programmet igen (start-windows.bat / start-mac.command), og genindlæs siden.";
   return "Jeg prøver automatisk igen hvert 5. sekund, så snart problemet er løst.";
@@ -519,6 +524,18 @@ async function restartScan() {
 }
 
 $("#restart-btn").addEventListener("click", restartScan);
+
+$("#permission-btn").addEventListener("click", async () => {
+  const result = await requestBluetoothPermission();
+  $("#start-panel").hidden = false;
+  $("#start-btn").focus();
+  showToast(
+    result.ok
+      ? "Tryk nu på Start scanning igen."
+      : "Chrome kunne ikke åbne listen. Giv Chrome tilladelsen 'Enheder i nærheden' i Android-indstillinger, og prøv igen.",
+    { ms: 7000 },
+  );
+});
 $("#follow-restart-btn").addEventListener("click", restartScan);
 
 if (storage.get(TIP_KEY, false)) $("#findmy-tip").hidden = true;

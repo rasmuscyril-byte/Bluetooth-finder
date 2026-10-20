@@ -473,6 +473,50 @@ try {
     await context.close();
   }
 
+  console.log("Phone: Chrome lacks the Android 'Nearby devices' permission");
+  {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: ANDROID_CHROME_UA, isMobile: true, hasTouch: true });
+    await fakeClientHints(context, CHROME_BRANDS);
+    await context.addInitScript(() => {
+      const target = new EventTarget();
+      let granted = false;
+      window.__requestDeviceCalls = 0;
+      target.requestDevice = async () => {
+        window.__requestDeviceCalls += 1;
+        granted = true; // the user tapped the permission link in Chrome's chooser
+        throw Object.assign(new Error("User cancelled the requestDevice() chooser."), { name: "NotFoundError" });
+      };
+      target.requestLEScan = async () => {
+        if (!granted) throw Object.assign(new Error("Bluetooth adapter not available."), { name: "NotFoundError" });
+        setInterval(() => {
+          const event = new Event("advertisementreceived");
+          const apple = new DataView(new Uint8Array([0x10, 0x05, 0x13, 0x18, 9, 9, 9]).buffer);
+          Object.assign(event, { device: { id: "perm-device" }, rssi: -60, manufacturerData: new Map([[0x004c, apple]]), serviceData: new Map(), uuids: [] });
+          target.dispatchEvent(event);
+        }, 150);
+        return { active: true, stop() { this.active = false; } };
+      };
+      Object.defineProperty(navigator, "bluetooth", { value: target, configurable: true });
+    });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await page.goto(`http://127.0.0.1:${pagesPort}/Bluetooth-finder/web/`);
+    await page.locator("#start-btn").click();
+    await page.waitForSelector("#permission-help:not([hidden])", { timeout: 5000 });
+    check(true, "a missing permission shows the 'Giv Chrome adgang' help");
+    check((await page.locator("#error-hint").innerText()).includes("NotFoundError"), "the technical error is shown for troubleshooting");
+    await page.screenshot({ path: join(shots, "phone-permission.png"), fullPage: true });
+    await page.locator("#permission-btn").click();
+    await page.waitForTimeout(300);
+    check((await page.evaluate(() => window.__requestDeviceCalls)) === 1, "the button opens Chrome's device chooser (requestDevice)");
+    await page.locator("#start-btn").click();
+    await page.waitForSelector(".device", { timeout: 5000 });
+    check(await page.locator("#error-panel").isHidden(), "after granting, scanning starts and the error goes away");
+    const real = errors.filter((text) => !text.includes("404"));
+    check(real.length === 0, `no console errors in the permission flow (${real.join(" | ")})`);
+    await context.close();
+  }
+
   for (const [label, userAgent, kind, brands] of [
     ["Samsung Internet", "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36", "android-other", ["Samsung Internet", "Chromium"]],
     ["Messenger in-app browser", "Mozilla/5.0 (Linux; Android 14; SM-S911B Build/UP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.0.0 Mobile Safari/537.36 [FB_IAB/Orca-Android;FBAV/480.0.0.0;]", "android-other", ["Android WebView", "Chromium"]],

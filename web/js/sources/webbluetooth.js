@@ -50,15 +50,37 @@ function describeError(error) {
     return "Scanning blev ikke tilladt. Giv siden adgang til Bluetooth og prøv igen (siden skal åbnes via https).";
   }
   if (name === "NotFoundError" || name === "NotSupportedError") {
-    return (
-      "Bluetooth er slået fra, eller Chrome mangler tilladelse. Slå Bluetooth til, og giv Chrome tilladelsen " +
-      "'Enheder i nærheden' (Android: Indstillinger → Apps → Chrome → Tilladelser). Prøv så igen."
-    );
+    // Chrome reports a missing Android permission the same way as Bluetooth
+    // being off ("Bluetooth adapter not available").
+    return "Android lader ikke Chrome bruge Bluetooth endnu. Tjek at Bluetooth er slået til, og giv Chrome lov med knappen herunder.";
   }
   if (name === "InvalidStateError") {
     return "Spørgsmålet om tilladelse blev afbrudt, før scanningen gik i gang. Prøv igen.";
   }
   return `Scanning kunne ikke starte: ${error?.message || name || "ukendt fejl"}`;
+}
+
+function technicalDetail(error) {
+  const parts = [error?.name, error?.message].filter(Boolean);
+  return parts.length ? `Teknisk: ${parts.join(": ")}` : null;
+}
+
+/**
+ * Chrome on Android never asks for the Android "Nearby devices" permission when
+ * a page starts a scan. Its device chooser (requestDevice) does: it shows a link
+ * that opens Android's permission prompt. Must be called from a user gesture.
+ */
+export async function requestBluetoothPermission(nav = globalThis.navigator) {
+  if (!nav?.bluetooth || typeof nav.bluetooth.requestDevice !== "function") {
+    return { ok: false, errorName: "NotSupportedError" };
+  }
+  try {
+    await nav.bluetooth.requestDevice({ acceptAllDevices: true });
+    return { ok: true, errorName: null };
+  } catch (error) {
+    // Closing the list is expected ("NotFoundError: User cancelled the requestDevice() chooser").
+    return { ok: error?.name === "NotFoundError", errorName: error?.name ?? null };
+  }
 }
 
 export function createWebBluetoothSource({ onAdverts, onStatus, batchMs = 250, nav = globalThis.navigator }) {
@@ -107,7 +129,7 @@ export function createWebBluetoothSource({ onAdverts, onStatus, batchMs = 250, n
         scan = await nav.bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
       } catch (error) {
         cleanup();
-        onStatus({ state: "error", message: describeError(error) });
+        onStatus({ state: "error", message: describeError(error), errorName: error?.name ?? null, detail: technicalDetail(error) });
         throw error;
       }
       timer = setInterval(flush, batchMs);

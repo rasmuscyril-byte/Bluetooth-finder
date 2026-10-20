@@ -179,3 +179,26 @@ test("Web Bluetooth source asks for a restart when Android pauses the scan", asy
   source.stop();
   assert.equal(source.needsRestart(), false, "a scan we stopped ourselves does not");
 });
+
+test("permission helper opens Chrome's device chooser and treats 'cancelled' as done", async () => {
+  const { requestBluetoothPermission } = await import("../../web/js/sources/webbluetooth.js");
+  const calls = [];
+  const cancelled = Object.assign(new Error("User cancelled the requestDevice() chooser."), { name: "NotFoundError" });
+  const nav = { bluetooth: { requestDevice: async (options) => { calls.push(options); throw cancelled; } } };
+  assert.deepEqual(await requestBluetoothPermission(nav), { ok: true, errorName: "NotFoundError" });
+  assert.deepEqual(calls, [{ acceptAllDevices: true }]);
+  const denied = { bluetooth: { requestDevice: async () => { throw Object.assign(new Error("x"), { name: "SecurityError" }); } } };
+  assert.equal((await requestBluetoothPermission(denied)).ok, false);
+  assert.equal((await requestBluetoothPermission({})).ok, false);
+});
+
+test("scan errors carry the technical name for the UI", async () => {
+  const nav = fakeNavigator({ fail: "NotFoundError" });
+  const statuses = [];
+  const source = createWebBluetoothSource({ onAdverts: () => {}, onStatus: (s) => statuses.push(s), nav });
+  await assert.rejects(source.start());
+  const last = statuses.at(-1);
+  assert.equal(last.errorName, "NotFoundError");
+  assert.match(last.detail, /NotFoundError/);
+  assert.match(last.message, /Bluetooth/);
+});

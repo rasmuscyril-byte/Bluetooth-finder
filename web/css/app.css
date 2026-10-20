@@ -357,6 +357,10 @@ main {
   text-align: center;
 }
 
+#permission-btn {
+  margin: 4px 0 10px;
+}
+
 .steps li {
   margin-bottom: 8px;
 }
